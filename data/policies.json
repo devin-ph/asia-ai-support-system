@@ -1,0 +1,34 @@
+[
+  {
+    "id": "returns",
+    "title": "Chính sách đổi trả",
+    "keywords": ["đổi trả", "trả hàng", "đổi hàng", "return"],
+    "answer": "Đơn hàng đủ điều kiện có thể được yêu cầu đổi hoặc trả trong vòng 7 ngày kể từ khi chuyển sang trạng thái Đã giao. Sản phẩm cần còn nguyên phụ kiện và không thuộc nhóm hàng không hỗ trợ đổi trả.",
+    "snippet": "Thời hạn yêu cầu đổi hoặc trả là 7 ngày kể từ khi đơn hàng chuyển sang trạng thái Đã giao.",
+    "source": "data/policies.json#returns"
+  },
+  {
+    "id": "refunds",
+    "title": "Chính sách hoàn tiền",
+    "keywords": ["hoàn tiền", "hoàn lại", "refund"],
+    "answer": "Sau khi yêu cầu hoàn tiền được chấp thuận, khoản hoàn sẽ được xử lý trong 3 đến 5 ngày làm việc. Thời điểm tiền hiển thị có thể phụ thuộc vào đơn vị thanh toán.",
+    "snippet": "Khoản hoàn được xử lý trong 3 đến 5 ngày làm việc sau khi yêu cầu được chấp thuận.",
+    "source": "data/policies.json#refunds"
+  },
+  {
+    "id": "warranty",
+    "title": "Chính sách bảo hành",
+    "keywords": ["bảo hành", "warranty"],
+    "answer": "Sản phẩm có thông tin bảo hành trên trang sản phẩm được tiếp nhận theo thời hạn công bố tại thời điểm mua. Khách hàng cần cung cấp mã đơn hàng khi yêu cầu hỗ trợ bảo hành.",
+    "snippet": "Thời hạn bảo hành áp dụng theo thông tin được công bố trên trang sản phẩm tại thời điểm mua.",
+    "source": "data/policies.json#warranty"
+  },
+  {
+    "id": "shipping",
+    "title": "Chính sách giao hàng",
+    "keywords": ["thời gian giao hàng", "phí giao hàng", "phí vận chuyển", "shipping fee"],
+    "answer": "Thời gian và phí giao hàng được hiển thị trước khi khách hàng xác nhận đơn. Thông tin dự kiến có thể thay đổi khi đơn vị vận chuyển cập nhật hành trình.",
+    "snippet": "Thời gian và phí giao hàng được hiển thị trước bước xác nhận đơn hàng.",
+    "source": "data/policies.json#shipping"
+  }
+]
