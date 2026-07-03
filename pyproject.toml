@@ -1,0 +1,10 @@
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]
+
+[tool.pyrefly]
+preset = "basic"
+project-includes = ["backend/**/*.py", "scripts/**/*.py"]
+search-path = ["backend"]
+python-version = "3.10"
+python-interpreter-path = ".venv/Scripts/python.exe"
