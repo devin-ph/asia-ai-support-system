@@ -38,11 +38,6 @@ python scripts/dev.py test
 python scripts/dev.py verify
 ```
 
-Use `test` for the fast backend development loop. Run `verify` before every
-commit or pull request; it checks backend tests, frontend typecheck/build,
-runtime-state hygiene, obvious credential assignments, and Git diff
-whitespace.
-
 ## Safety Rules
 
 * Use synthetic data only.
@@ -55,6 +50,119 @@ whitespace.
 * Repeated confirmation must not create duplicate tickets.
 * If policy evidence is missing, return an insufficient-context response instead of inventing an answer.
 * Order lookup must only return safe fields and must enforce the fixed demo customer ownership check.
+
+## Git Workflow Rules
+
+This project uses a simple personal-project branching workflow.
+
+### Branch roles
+
+* `main` must stay stable, runnable, and demo-ready.
+* Do not commit experimental or half-broken work directly to `main`.
+* Create a short-lived branch before making non-trivial changes.
+
+Use branch prefixes consistently:
+
+* `feat/...` for real product features.
+* `fix/...` for bug fixes.
+* `docs/...` for README, AGENTS.md, walkthroughs, architecture notes, and other documentation.
+* `test/...` for adding or updating tests.
+* `chore/...` for tooling, harnessing, setup, verification scripts, dependency/config cleanup.
+* `refactor/...` for code structure changes that should not alter behavior.
+
+Examples:
+
+* `chore/v0.1.1-alignment`
+* `fix/runtime-ticket-storage`
+* `docs/frontend-agents`
+* `test/frontend-confirmation-flow`
+* `ci/github-actions-verify`
+* `refactor/provider-boundaries`
+* `feat/rag-provider`
+
+### Before starting work
+
+Start from an up-to-date `main`:
+
+```bash
+git checkout main
+git pull --ff-only origin main
+git status
+```
+
+Then create a focused branch:
+
+```bash
+git checkout -b chore/v0.1.1-alignment
+```
+
+### Before merging to main
+
+Run the project verification commands documented in this repo.
+
+Use:
+
+```bash
+python scripts/dev.py verify
+```
+
+Only merge when:
+
+* the working tree is clean except for intentional changes;
+* backend tests pass;
+* frontend typecheck/build pass;
+* demo-critical flows are not broken;
+* tracked fixtures are not dirtied by runtime/demo data;
+* the change matches the current milestone scope.
+
+### Milestones and tags
+
+Use Git tags to mark stable demo milestones.
+
+Examples:
+
+```bash
+git tag -a v0.1.0 -m "A.S.I.A v0.1 runnable vertical slice"
+git push origin v0.1.0
+```
+
+Use tags for stable snapshots. Do not keep many long-lived demo branches unless there is a specific reason.
+
+### Branch cleanup
+
+After a branch has been merged into `main` and `main` is stable, delete the branch locally and remotely if it is no longer needed.
+
+Check merged local branches:
+
+```bash
+git branch --merged main
+```
+
+Delete a merged local branch:
+
+```bash
+git branch -d branch-name
+```
+
+Delete the remote branch:
+
+```bash
+git push origin --delete branch-name
+```
+
+Sync/prune stale remote references:
+
+```bash
+git fetch --prune origin
+```
+
+Do not delete:
+
+* `main`;
+* the current branch;
+* unmerged branches;
+* milestone tags;
+* branches that intentionally preserve a long-running experiment.
 
 ## Definition of Done
 
