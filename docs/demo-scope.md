@@ -187,8 +187,9 @@ Explicitly excluded:
 The milestone is done when:
 
 - All four required flows work through the API.
-- `python scripts/dev.py doctor` passes once backend and frontend prerequisites
-  are installed and present.
+- `python scripts/dev.py doctor` confirms supported Python and Node versions,
+  installed backend/frontend dependencies, importable application code, and
+  writable local runtime storage.
 - `python scripts/dev.py test` passes.
 - `python scripts/dev.py verify` passes before a commit or pull request.
 - OpenAPI starts locally with `python scripts/dev.py backend`.

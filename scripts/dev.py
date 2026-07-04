@@ -17,6 +17,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -28,8 +29,16 @@ BACKEND_DIR = ROOT / "backend"
 FRONTEND_DIR = ROOT / "frontend"
 BACKEND_ENTRY = BACKEND_DIR / "app" / "main.py"
 FRONTEND_PKG = FRONTEND_DIR / "package.json"
+FRONTEND_LOCK = FRONTEND_DIR / "package-lock.json"
+FRONTEND_NODE_MODULES = FRONTEND_DIR / "node_modules"
+RUNTIME_DIR = ROOT / "var"
 TICKET_SEED = ROOT / "data" / "fixtures" / "demo_tickets.seed.json"
-RUNTIME_TICKETS = ROOT / "var" / "demo_tickets.json"
+RUNTIME_TICKETS = RUNTIME_DIR / "demo_tickets.json"
+ENV_FILE = ROOT / ".env"
+ENV_EXAMPLE = ROOT / ".env.example"
+
+SUPPORTED_NODE_RANGE = "^20.19.0 || >=22.12.0"
+REQUIRED_FRONTEND_SCRIPTS = ("typecheck", "build")
 
 _OBVIOUS_SECRET_RE = re.compile(
     r"""(?ix)
@@ -89,6 +98,64 @@ def _check_python() -> bool:
     return False
 
 
+def _parse_semantic_version(version: str) -> tuple[int, int, int] | None:
+    """Parse the numeric prefix from versions such as ``v22.12.0``."""
+    match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", version.strip())
+    if match is None:
+        return None
+    return (
+        int(match.group(1)),
+        int(match.group(2)),
+        int(match.group(3)),
+    )
+
+
+def _node_version_supported(version: str) -> bool:
+    """Return whether a Node version satisfies Vite 7's engine range."""
+    parsed = _parse_semantic_version(version)
+    if parsed is None:
+        return False
+    major, minor, patch = parsed
+    if major == 20:
+        return (major, minor, patch) >= (20, 19, 0)
+    return (major, minor, patch) >= (22, 12, 0)
+
+
+def _check_node() -> bool:
+    """Check that Node exists and satisfies the frontend engine range."""
+    node = shutil.which("node")
+    if node is None:
+        print(f"  {_red(_FAIL)} Node.js - not found on PATH")
+        print(f"    Install Node.js {SUPPORTED_NODE_RANGE}.")
+        return False
+
+    try:
+        result = subprocess.run(
+            [node, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"  {_red(_FAIL)} Node.js - version check failed: {exc}")
+        return False
+
+    version = result.stdout.strip() or result.stderr.strip()
+    if result.returncode == 0 and _node_version_supported(version):
+        print(
+            f"  {_green(_OK)} Node.js {version.removeprefix('v')} "
+            f"(supported: {SUPPORTED_NODE_RANGE})"
+        )
+        return True
+
+    shown_version = version.removeprefix("v") or "unknown"
+    print(
+        f"  {_red(_FAIL)} Node.js {shown_version} is unsupported "
+        f"(need {SUPPORTED_NODE_RANGE})"
+    )
+    return False
+
+
 def _check_command(name: str, version_flag: str = "--version") -> bool:
     """Check that *name* is on PATH and can report its version."""
     path = shutil.which(name)
@@ -107,8 +174,8 @@ def _check_command(name: str, version_flag: str = "--version") -> bool:
             detail = output.splitlines()[0] if output else "version check failed"
             print(f"  {_red(_FAIL)} {name} - {detail}")
             return False
-        version = output.splitlines()[0] if output else f"{name} found at {path}"
-        print(f"  {_green(_OK)} {version}")
+        version = output.splitlines()[0] if output else f"found at {path}"
+        print(f"  {_green(_OK)} {name} {version}")
         return True
     except Exception as exc:  # noqa: BLE001
         print(f"  {_red(_FAIL)} {name} - error: {exc}")
@@ -144,19 +211,154 @@ def _check_path(label: str, path: Path, *, required: bool = True) -> bool:
     return not required
 
 
+def _check_backend_import() -> bool:
+    """Import the actual FastAPI application from the backend directory."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from app.main import app; assert app is not None",
+        ],
+        cwd=BACKEND_DIR,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    if result.returncode == 0:
+        print(f"  {_green(_OK)} Backend application imports successfully")
+        return True
+
+    print(f"  {_red(_FAIL)} Backend application import failed")
+    detail_lines = (result.stderr.strip() or result.stdout.strip()).splitlines()
+    if detail_lines:
+        print(f"    {detail_lines[-1]}")
+    return False
+
+
+def _check_frontend_scripts() -> bool:
+    """Validate required npm scripts in the frontend manifest."""
+    try:
+        manifest = json.loads(FRONTEND_PKG.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        print(f"  {_red(_FAIL)} frontend/package.json is missing")
+        return False
+    except json.JSONDecodeError as exc:
+        print(f"  {_red(_FAIL)} frontend/package.json is invalid JSON: {exc}")
+        return False
+
+    scripts = manifest.get("scripts")
+    if not isinstance(scripts, dict):
+        print(f"  {_red(_FAIL)} frontend/package.json has no scripts object")
+        return False
+
+    missing = [
+        name
+        for name in REQUIRED_FRONTEND_SCRIPTS
+        if not isinstance(scripts.get(name), str) or not scripts[name].strip()
+    ]
+    if missing:
+        print(
+            f"  {_red(_FAIL)} Missing frontend scripts: "
+            f"{', '.join(missing)}"
+        )
+        return False
+
+    engines = manifest.get("engines")
+    node_range = engines.get("node") if isinstance(engines, dict) else None
+    if node_range != SUPPORTED_NODE_RANGE:
+        print(
+            f"  {_red(_FAIL)} frontend/package.json must declare Node "
+            f"{SUPPORTED_NODE_RANGE}"
+        )
+        return False
+
+    print(
+        f"  {_green(_OK)} Frontend scripts available: "
+        f"{', '.join(REQUIRED_FRONTEND_SCRIPTS)}; "
+        f"Node {SUPPORTED_NODE_RANGE}"
+    )
+    return True
+
+
+def _check_frontend_dependencies() -> bool:
+    """Check that the lockfile dependencies are installed and complete."""
+    if not FRONTEND_NODE_MODULES.is_dir():
+        print(f"  {_red(_FAIL)} frontend/node_modules is missing")
+        print("    Run: cd frontend && npm ci")
+        return False
+
+    npm = _npm_command()
+    if npm is None:
+        print(f"  {_red(_FAIL)} npm - not found on PATH")
+        return False
+
+    result = subprocess.run(
+        [npm, "ls", "--depth=0"],
+        cwd=FRONTEND_DIR,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if result.returncode == 0:
+        print(f"  {_green(_OK)} Frontend dependencies are installed")
+        return True
+
+    print(f"  {_red(_FAIL)} Frontend dependencies are incomplete or invalid")
+    print("    Run: cd frontend && npm ci")
+    return False
+
+
+def _check_runtime_writable() -> bool:
+    """Verify that the ignored local runtime directory can be written."""
+    probe_path: Path | None = None
+    try:
+        RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            prefix=".doctor-",
+            suffix=".tmp",
+            dir=RUNTIME_DIR,
+            delete=False,
+        ) as probe:
+            probe.write("ok\n")
+            probe_path = Path(probe.name)
+    except OSError as exc:
+        print(f"  {_red(_FAIL)} Runtime directory is not writable: {exc}")
+        return False
+    finally:
+        if probe_path is not None:
+            probe_path.unlink(missing_ok=True)
+
+    print(f"  {_green(_OK)} Runtime directory is writable (var/)")
+    return True
+
+
+def _check_env_configuration() -> bool:
+    """Check the optional dotenv contract for the current milestone."""
+    if not ENV_EXAMPLE.exists():
+        print(f"  {_green(_OK)} No .env configuration required for v0.1")
+        return True
+    if ENV_FILE.exists():
+        print(f"  {_green(_OK)} .env exists for the declared environment")
+        return True
+
+    print(f"  {_red(_FAIL)} .env.example exists but .env is missing")
+    print("    Copy .env.example to .env and fill the required local values.")
+    return False
+
+
 def cmd_doctor(_args: argparse.Namespace) -> int:
-    """Run environment checks and report results."""
-    print(_bold("Running doctor checks...\n"))
+    """Verify that this machine can run the complete local project."""
+    print(_bold("Checking full local project readiness...\n"))
     results: list[bool] = []
 
     print(_bold("[Runtime]"))
     results.append(_check_python())
-
-    print(f"\n{_bold('[Tools]')}")
-    results.append(_check_command("node"))
+    results.append(_check_node())
     results.append(_check_command("npm"))
 
-    print(f"\n{_bold('[Python packages]')}")
+    print(f"\n{_bold('[Backend]')}")
     for module in (
         "fastapi",
         "uvicorn",
@@ -166,22 +368,37 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
         "anyio",
     ):
         results.append(_check_python_module(module))
-
-    print(f"\n{_bold('[Project files]')}")
     results.append(_check_path("backend entry", BACKEND_ENTRY, required=True))
+    results.append(_check_backend_import())
+
+    print(f"\n{_bold('[Frontend]')}")
     results.append(
         _check_path("frontend package.json", FRONTEND_PKG, required=True)
     )
+    results.append(
+        _check_path("frontend package-lock.json", FRONTEND_LOCK, required=True)
+    )
+    results.append(_check_frontend_scripts())
+    results.append(_check_frontend_dependencies())
+
+    print(f"\n{_bold('[Local state]')}")
+    results.append(_check_runtime_writable())
+    results.append(_check_env_configuration())
 
     passed = sum(results)
     total = len(results)
     print(f"\n{passed}/{total} checks passed.")
 
     if all(results):
-        print(_green("\nAll good - ready to develop!"))
+        print(_green("\nEnvironment is ready to run the full project."))
         return 0
 
-    print(_yellow("\nSome checks did not pass. See above for details."))
+    print(
+        _yellow(
+            "\nEnvironment is not ready yet. "
+            "Follow the remediation hints above."
+        )
+    )
     return 1
 
 
