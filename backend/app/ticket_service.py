@@ -11,6 +11,7 @@ from threading import RLock
 from app.schemas import ActionStatus, ActionType, PendingAction
 from app.storage import (
     DEMO_TICKETS_PATH,
+    DEMO_TICKETS_SEED_PATH,
     TicketRecord,
     load_tickets,
     save_tickets,
@@ -41,8 +42,13 @@ class TicketService:
         self._lock = RLock()
         self._tickets_path = tickets_path
         self._pending_actions: dict[str, _PendingActionRecord] = {}
+        initial_store = (
+            tickets_path
+            if tickets_path.exists()
+            else DEMO_TICKETS_SEED_PATH
+        )
         self._tickets = {
-            ticket.ticket_id: ticket for ticket in load_tickets(tickets_path)
+            ticket.ticket_id: ticket for ticket in load_tickets(initial_store)
         }
 
     @property
@@ -107,4 +113,3 @@ class TicketService:
                 ticket_id=ticket.ticket_id,
                 repeated=False,
             )
-
