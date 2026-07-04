@@ -268,8 +268,10 @@ evaluated against the deterministic baseline.
 
 ### Synthetic data: safe fixtures by construction
 
-- `data/demo_orders.json` contains synthetic order fixtures.
-- `data/demo_tickets.json` stores only locally confirmed demo tickets.
+- `data/fixtures/demo_orders.json` contains immutable synthetic order fixtures.
+- `data/fixtures/demo_tickets.seed.json` is the immutable empty ticket seed.
+- `var/demo_tickets.json` stores locally confirmed demo tickets and is ignored
+  by Git. It is created on the first confirmed ticket.
 - `docs/policies/*.md` is the only trusted policy corpus.
 - The fixed identity is `demo-customer-001`.
 
@@ -301,8 +303,9 @@ direct authority to execute it.
 - The demo represents one fixed synthetic customer and has no authentication.
 - Pending actions, messages, and aggregate counters are process-local and reset
   when the backend restarts.
-- Confirmed tickets persist to a local JSON file, which is not suitable for
-  multiple processes or production concurrency.
+- Confirmed tickets persist to the ignored `var/demo_tickets.json` runtime
+  file, which is not suitable for multiple processes or production
+  concurrency.
 - There is no LLM, embedding model, vector database, PostgreSQL, queue, cache,
   Docker setup, or cloud deployment.
 - The frontend is intentionally minimal and targets the local API.

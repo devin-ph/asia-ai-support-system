@@ -19,7 +19,8 @@ The backend implements the deterministic API contract for the
 - `app/storage.py`: validated JSON loading and atomic ticket writes.
 - `app/ticket_service.py`: pending actions and idempotent ticket confirmation.
 - `tests/`: API contract and safety tests.
-- `../data/`: synthetic policy and order fixtures.
+- `../data/fixtures/`: immutable synthetic JSON fixtures.
+- `../var/`: ignored local runtime state.
 
 Keep route handlers thin. Business rules belong in dedicated services or
 `state.py`, not directly in HTTP handlers.
@@ -45,22 +46,27 @@ Keep route handlers thin. Business rules belong in dedicated services or
 ## State and Concurrency
 
 Pending actions, message counters, and tool counters are process-local and reset
-on restart. Confirmed tickets persist in `data/demo_tickets.json`. Mutations
+on restart. Confirmed tickets persist in the ignored
+`var/demo_tickets.json` runtime store. Mutations
 that implement confirmation idempotency and ticket writes must be guarded so
 two concurrent confirmations cannot create two tickets in one process.
 
 Write JSON through `storage.py`; tests must inject a temporary ticket path.
+Never write runtime state back into `data/fixtures/`.
 Do not add PostgreSQL, migrations, background workers, or external services in
 this milestone.
 
 ## Synthetic Data
 
-- Use only fixtures committed under `data/`.
+- Use only fixtures committed under `data/fixtures/`.
 - Treat `docs/policies/*.md` as the only trusted policy corpus.
 - The fixed customer is `demo-customer-001`.
 - Include at least one non-owned order only for ownership-denial tests.
 - Never expose the non-owned record through an API response.
-- Keep `data/demo_tickets.json` initialized as an empty JSON list in Git.
+- Keep `data/fixtures/demo_tickets.seed.json` initialized as an empty JSON list
+  in Git.
+- Keep `var/` ignored; `var/demo_tickets.json` is generated locally on the
+  first confirmed ticket.
 - Do not add realistic names, addresses, phone numbers, emails, or payment
   details.
 
