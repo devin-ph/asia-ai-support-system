@@ -122,16 +122,23 @@ Open `http://127.0.0.1:5173`.
 
 ### Run tests
 
+Use the fast backend test loop while developing:
+
 ```bash
 python scripts/dev.py test
 ```
 
-For a production-style frontend build:
+Before committing or opening a pull request, run the full-project verification:
 
 ```bash
-cd frontend
-npm run build
+python scripts/dev.py verify
 ```
+
+`verify` runs backend tests, frontend typecheck and production build, validates
+runtime/fixture Git hygiene, scans candidate files for obvious credential
+assignments without printing values, and checks staged and unstaged diffs for
+whitespace errors. Lint and format checks are not included until the project
+adopts those tools explicitly.
 
 ## Demo script
 
@@ -244,10 +251,13 @@ python scripts/dev.py doctor
 python scripts/dev.py backend
 python scripts/dev.py frontend
 python scripts/dev.py test
+python scripts/dev.py verify
 ```
 
-This reduces environment guesswork and makes verification part of the normal
-workflow.
+`test` is intentionally backend-only and optimized for the fast development
+loop. `verify` is the full-stack “ready to commit / ready for PR” gate. This
+separation reduces environment guesswork without making every local test run
+pay the cost of a frontend production build.
 
 ### Fake providers: deterministic local stand-ins
 

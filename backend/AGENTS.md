@@ -91,6 +91,13 @@ Run:
 python scripts/dev.py test
 ```
 
+This is the fast backend-only loop. Before committing or opening a pull
+request, run the full repository verification:
+
+```bash
+python scripts/dev.py verify
+```
+
 Tests must construct fresh state with a temporary ticket file and must not
 depend on execution order.
 
