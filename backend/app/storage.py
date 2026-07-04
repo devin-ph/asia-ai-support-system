@@ -9,9 +9,12 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
-DEMO_ORDERS_PATH = DATA_DIR / "demo_orders.json"
-DEMO_TICKETS_PATH = DATA_DIR / "demo_tickets.json"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+FIXTURES_DIR = PROJECT_ROOT / "data" / "fixtures"
+RUNTIME_DIR = PROJECT_ROOT / "var"
+DEMO_ORDERS_PATH = FIXTURES_DIR / "demo_orders.json"
+DEMO_TICKETS_SEED_PATH = FIXTURES_DIR / "demo_tickets.seed.json"
+DEMO_TICKETS_PATH = RUNTIME_DIR / "demo_tickets.json"
 
 
 class OrderRecord(BaseModel):
