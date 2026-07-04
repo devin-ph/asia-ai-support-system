@@ -165,6 +165,7 @@ Explicitly excluded:
 - OpenAI or any other hosted model
 - LangGraph, Qdrant, embeddings, or retrieval infrastructure
 - Authentication and production authorization
+- Server-side conversation history or session persistence
 - PostgreSQL, migrations, a queue, cache, Docker, or cloud deployment
 - Real commerce integrations, real customers, or real PII
 - Production-grade multilingual NLU

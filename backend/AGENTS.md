@@ -30,6 +30,8 @@ Keep route handlers thin. Business rules belong in dedicated services or
 - Preserve the response envelope documented in `docs/demo-scope.md`.
 - The chat response has exactly `assistant_message`, `intent`, `sentiment`,
   `citations`, `tool_events`, and `pending_action`.
+- `ChatRequest` accepts only `message`; do not expose reserved or ignored
+  session fields before server-side conversation persistence exists.
 - Use Pydantic models for public request and response data.
 - Validate and trim user input at the API boundary.
 - Return the same response for unknown and non-owned order IDs.

@@ -85,6 +85,22 @@ Examples:
 * `refactor/provider-boundaries`
 * `feat/rag-provider`
 
+### Before starting work
+
+Start from an up-to-date `main`:
+
+```bash
+git checkout main
+git pull --ff-only origin main
+git status
+```
+
+Then create a focused branch:
+
+```bash
+git checkout -b chore/v0.1.1-alignment
+```
+
 ### Commit message rules (Conventional Commits)
 
 All commits should follow the Conventional Commits format:
@@ -109,22 +125,6 @@ git commit -m "fix(runtime): persist ticket storage correctly"
 git commit -m "docs(frontend): add AGENTS.md for UI rules"
 git commit -m "test(frontend): cover confirmation flow"
 git commit -m "chore(verify): add unified verification command"
-```
-
-### Before starting work
-
-Start from an up-to-date `main`:
-
-```bash
-git checkout main
-git pull --ff-only origin main
-git status
-```
-
-Then create a focused branch:
-
-```bash
-git checkout -b chore/v0.1.1-alignment
 ```
 
 ### Before merging to main
