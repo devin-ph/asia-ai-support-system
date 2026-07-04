@@ -56,6 +56,8 @@ add frontend-only fields to API types.
 ## Dependencies
 
 - React, ReactDOM, TypeScript, and Vite are the only dependencies.
+- Node.js must satisfy `^20.19.0 || >=22.12.0` for Vite 7.
+- Install the locked dependency graph with `npm ci`.
 - Do not add Redux, Zustand, TanStack Query, Tailwind, or any UI component
   library in this milestone.
 - Add a dependency only when the standard React API and vanilla CSS are

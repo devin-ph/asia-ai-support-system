@@ -38,6 +38,11 @@ python scripts/dev.py test
 python scripts/dev.py verify
 ```
 
+Use `doctor` to determine whether a newly cloned environment can run the full
+project. It must validate supported runtime versions, installed dependencies,
+backend importability, frontend scripts, and writable local state rather than
+only checking whether executables exist.
+
 ## Safety Rules
 
 * Use synthetic data only.
@@ -80,6 +85,32 @@ Examples:
 * `refactor/provider-boundaries`
 * `feat/rag-provider`
 
+### Commit message rules (Conventional Commits)
+
+All commits should follow the Conventional Commits format:
+
+<type>(optional-scope): <short description>
+
+Common types:
+
+* `feat`: new feature
+* `fix`: bug fix
+* `docs`: documentation changes
+* `test`: adding or updating tests
+* `chore`: tooling, scripts, config, maintenance
+* `refactor`: code changes without behavior change
+* `ci`: CI/CD related changes
+
+Examples:
+
+```bash
+git commit -m "feat(rag): add provider abstraction"
+git commit -m "fix(runtime): persist ticket storage correctly"
+git commit -m "docs(frontend): add AGENTS.md for UI rules"
+git commit -m "test(frontend): cover confirmation flow"
+git commit -m "chore(verify): add unified verification command"
+```
+
 ### Before starting work
 
 Start from an up-to-date `main`:
@@ -114,6 +145,26 @@ Only merge when:
 * demo-critical flows are not broken;
 * tracked fixtures are not dirtied by runtime/demo data;
 * the change matches the current milestone scope.
+
+### Merge workflow and merge commits
+
+When integrating a branch into `main`, use a merge commit (do not squash) so that the branch context is preserved.
+
+Example:
+
+```bash
+git checkout main
+git pull --ff-only origin main
+git merge --no-ff chore/verification-harness -m "merge: integrate verification harness and workflow guidelines"
+git push origin main
+```
+
+Guidelines:
+
+* Always ensure the branch has passed verification before merging.
+* Use a clear merge commit message describing what is being integrated.
+* Prefer `--no-ff` to keep a visible history of feature/chore branches.
+* After merging, verify again on `main` if needed.
 
 ### Milestones and tags
 

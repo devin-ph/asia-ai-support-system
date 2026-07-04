@@ -61,7 +61,8 @@ API:
 ### Prerequisites
 
 - Python 3.10 or newer
-- Node.js and npm
+- Node.js `^20.19.0` or `>=22.12.0`
+- npm
 
 Create and activate a virtual environment:
 
@@ -86,15 +87,21 @@ Install dependencies from the repository root:
 ```bash
 python -m pip install -r backend/requirements.txt
 cd frontend
-npm install
+npm ci
 cd ..
 ```
 
-Verify the local environment:
+Verify that the machine can run the complete project:
 
 ```bash
 python scripts/dev.py doctor
 ```
+
+`doctor` validates the Python and Node versions, npm, backend dependencies and
+application import, the frontend lockfile/scripts/installed dependencies,
+writable local runtime storage, and the current `.env` contract. If
+`frontend/node_modules` is missing or incomplete, run `npm ci` inside
+`frontend/`.
 
 ### Start the backend
 
