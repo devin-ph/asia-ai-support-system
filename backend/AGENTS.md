@@ -12,45 +12,55 @@ The backend implements the deterministic API contract for the
 
 - `app/main.py`: FastAPI construction, middleware, and HTTP route orchestration.
 - `app/schemas.py`: public request and response models.
-- `app/support.py`: deterministic text normalization, intent, sentiment, policy,
-  and order logic.
-- `app/state.py`: in-memory actions, tickets, and aggregate counters.
-- `app/demo_data.py`: validated loader for repository-owned synthetic fixtures.
+- `app/intent.py`: deterministic Vietnamese intent and sentiment analysis.
+- `app/order_service.py`: fixed-customer lookup and safe order response shaping.
+- `app/policy_search.py`: keyword search over allowlisted Markdown sections.
+- `app/state.py`: in-memory actions and counters plus ticket orchestration.
+- `app/storage.py`: validated JSON loading and atomic ticket writes.
+- `app/ticket_service.py`: pending actions and idempotent ticket confirmation.
 - `tests/`: API contract and safety tests.
 - `../data/`: synthetic policy and order fixtures.
 
-Keep route handlers thin. Business rules belong in `support.py` or `state.py`,
-not directly in HTTP handlers.
+Keep route handlers thin. Business rules belong in dedicated services or
+`state.py`, not directly in HTTP handlers.
 
 ## API Invariants
 
 - Preserve the response envelope documented in `docs/demo-scope.md`.
+- The chat response has exactly `assistant_message`, `intent`, `sentiment`,
+  `citations`, `tool_events`, and `pending_action`.
 - Use Pydantic models for public request and response data.
 - Validate and trim user input at the API boundary.
 - Return the same response for unknown and non-owned order IDs.
 - Never add owner IDs, addresses, contact details, payment data, or internal
   notes to `OrderSummary`.
 - Policy responses without evidence must contain no citations.
-- Chat may draft an action but must never execute a write.
+- Policy citations contain the Markdown title, repository-relative source, and
+  exact H2 section.
+- Chat may call `draft_ticket` but must never execute or persist a ticket.
 - Ticket creation is allowed only through the confirmation endpoint.
 - Repeated confirmation of one action must return the original result.
 - Admin responses contain aggregate counters only.
 
 ## State and Concurrency
 
-State is intentionally process-local and resets on restart. Mutations that
-implement confirmation idempotency must be guarded so two concurrent
-confirmations cannot create two tickets in one process.
+Pending actions, message counters, and tool counters are process-local and reset
+on restart. Confirmed tickets persist in `data/demo_tickets.json`. Mutations
+that implement confirmation idempotency and ticket writes must be guarded so
+two concurrent confirmations cannot create two tickets in one process.
 
-Do not add persistence, background workers, or external services in this
-milestone.
+Write JSON through `storage.py`; tests must inject a temporary ticket path.
+Do not add PostgreSQL, migrations, background workers, or external services in
+this milestone.
 
 ## Synthetic Data
 
 - Use only fixtures committed under `data/`.
-- The fixed customer is `CUS-DEMO-001`.
+- Treat `docs/policies/*.md` as the only trusted policy corpus.
+- The fixed customer is `demo-customer-001`.
 - Include at least one non-owned order only for ownership-denial tests.
 - Never expose the non-owned record through an API response.
+- Keep `data/demo_tickets.json` initialized as an empty JSON list in Git.
 - Do not add realistic names, addresses, phone numbers, emails, or payment
   details.
 
@@ -60,10 +70,13 @@ Every behavior change must include or update tests. At minimum, preserve tests
 for:
 
 - health and request validation;
-- Vietnamese intent detection with diacritics;
+- all supported Vietnamese intent and sentiment labels, including text with
+  diacritics;
 - grounded policy citations and insufficient context;
+- all allowlisted policy topics and exact citation metadata;
 - owned, unknown, and non-owned order lookup;
-- ticket draft, confirmation, cancellation, and repeated confirmation;
+- ticket draft, persistence, confirmation, cancellation, and repeated
+  confirmation;
 - admin message, intent, sentiment, ticket, and tool counters.
 
 Run:
@@ -72,8 +85,8 @@ Run:
 python scripts/dev.py test
 ```
 
-Tests must construct fresh in-memory state and must not depend on execution
-order.
+Tests must construct fresh state with a temporary ticket file and must not
+depend on execution order.
 
 ## Style
 
@@ -85,4 +98,3 @@ order.
 - Do not log request bodies or action payloads.
 - Add dependencies only when the standard library and current stack are
   insufficient.
-

@@ -7,18 +7,18 @@
 A.S.I.A is a local demonstration of a Vietnamese e-commerce customer-support
 system. The milestone proves the end-to-end product contract with deterministic
 logic and synthetic data before introducing an LLM, vector database, external
-services, or persistent storage.
+services, or a production database.
 
 ## Demo Identity
 
 The application represents one fixed synthetic customer:
 
-- Customer ID: `CUS-DEMO-001`
+- Customer ID: `demo-customer-001`
 - Display name: `Khách hàng Demo`
 - All orders, policies, actions, and tickets in this milestone are synthetic.
 
 The API must never return data from an order that is not owned by
-`CUS-DEMO-001`.
+`demo-customer-001`.
 
 ## Required Flows
 
@@ -31,11 +31,12 @@ Acceptance criteria:
 
 - Vietnamese text with or without diacritics is understood for supported topics.
 - A supported answer is derived from a matching demo policy record.
-- Every supported answer includes at least one citation containing a source and
-  an evidence snippet.
+- Every supported answer includes at least one citation containing the policy
+  title, repository-relative source, and exact section heading.
 - If no matching evidence exists, the response explicitly says that context is
   insufficient and returns no citations.
 - The system must not invent policy details.
+- `docs/policies/*.md` is the only trusted policy corpus.
 
 ### 2. Synthetic order lookup
 
@@ -47,7 +48,8 @@ Acceptance criteria:
   item count, and last update time.
 - Address, phone, email, payment information, and internal owner identifiers are
   never returned.
-- Ownership is checked against `CUS-DEMO-001` before building the response.
+- Ownership is checked against `demo-customer-001` before building the
+  response.
 - Unknown and non-owned order IDs receive the same generic not-found response
   to avoid revealing whether another customer's order exists.
 - If no order ID is supplied, the assistant asks for one and performs no lookup.
@@ -65,6 +67,10 @@ Acceptance criteria:
 - Repeating a confirmation for the same action is idempotent and returns the
   original ticket ID without creating another ticket.
 - Confirming an already cancelled action does not create a ticket.
+- Confirmed tickets are stored in `data/demo_tickets.json`; pending actions
+  remain process-local and reset on restart.
+- `backend/app/ticket_service.py` owns the draft, decline, and idempotent
+  confirmation lifecycle.
 
 ### 4. Admin overview
 
@@ -89,13 +95,15 @@ Acceptance criteria:
 
 `POST /api/chat` keeps one stable envelope containing:
 
-- `reply`
+- `assistant_message`
 - `intent`
 - `sentiment`
 - `citations`
-- `order` when a safe owned-order lookup succeeds
-- `actions`
-- `session_id`
+- `tool_events`
+- `pending_action`
+
+Safe order fields are returned only inside a completed `order_lookup` tool
+event. Ticket requests populate `pending_action` but do not create a ticket.
 
 ## Demo Tools
 
@@ -109,15 +117,43 @@ A tool count is incremented only when the corresponding lookup or confirmed
 write is actually performed. Merely proposing a ticket does not count as a
 write.
 
+## Deterministic Analysis Labels
+
+`backend/app/intent.py` classifies every message without an LLM.
+
+Supported intents:
+
+- `order_lookup`
+- `shipping_policy`
+- `return_refund`
+- `warranty`
+- `ticket_request`
+- `other`
+
+Supported sentiments:
+
+- `positive`
+- `neutral`
+- `negative`
+
+Rules normalize Vietnamese diacritics and apply an explicit keyword priority.
+These labels are part of the API and admin counter contract.
+
 ## Technical Boundaries
 
 Included:
 
 - FastAPI and Pydantic
-- In-memory state that resets on restart
+- In-memory message, action, and counter state that resets on restart
+- Validated local JSON storage for synthetic orders and confirmed tickets
+- `data/demo_orders.json` as the read-only order fixture
+- `data/demo_tickets.json` as the confirmed-ticket store
+- Keyword search over allowlisted sections in `docs/policies/*.md`
 - Deterministic intent and sentiment classification
-- Repository-owned synthetic policy and order fixtures
+- Repository-owned synthetic policy documents and order fixtures
 - Automated API tests
+- Minimal React and TypeScript interface for chat, citations, confirmations,
+  and the admin overview
 - Local CORS configuration for the development frontend
 
 Explicitly excluded:
@@ -125,7 +161,7 @@ Explicitly excluded:
 - OpenAI or any other hosted model
 - LangGraph, Qdrant, embeddings, or retrieval infrastructure
 - Authentication and production authorization
-- A database, queue, cache, Docker, or cloud deployment
+- PostgreSQL, migrations, a queue, cache, Docker, or cloud deployment
 - Real commerce integrations, real customers, or real PII
 - Production-grade multilingual NLU
 
@@ -138,7 +174,8 @@ Explicitly excluded:
 5. Confirmation is idempotent per action ID.
 6. API and admin responses do not expose unsafe order fields or stored message
    content.
-7. Secrets and credentials are never committed.
+7. Tests write tickets only to temporary files, never to the repository fixture.
+8. Secrets and credentials are never committed.
 
 ## Definition of Done
 
@@ -150,6 +187,6 @@ The milestone is done when:
 - `python scripts/dev.py test` passes.
 - OpenAPI starts locally with `python scripts/dev.py backend`.
 - Tests cover policy grounding, insufficient context, order ownership and safe
-  fields, ticket confirmation idempotency, cancellation, and admin counters.
+  fields, ticket persistence, confirmation idempotency, cancellation, and admin
+  counters.
 - README instructions and response examples match the implemented API.
-
