@@ -70,7 +70,12 @@ npm run build
 ```
 
 Run `npm run typecheck` before committing frontend changes. A clean
-typecheck is required for the definition of done.
+typecheck is required for the definition of done. Before committing or opening
+a pull request, run the repository-level verification from the project root:
+
+```bash
+python scripts/dev.py verify
+```
 
 ## UI States
 

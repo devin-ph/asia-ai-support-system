@@ -190,6 +190,7 @@ The milestone is done when:
 - `python scripts/dev.py doctor` passes once backend and frontend prerequisites
   are installed and present.
 - `python scripts/dev.py test` passes.
+- `python scripts/dev.py verify` passes before a commit or pull request.
 - OpenAPI starts locally with `python scripts/dev.py backend`.
 - Tests cover policy grounding, insufficient context, order ownership and safe
   fields, ticket persistence, confirmation idempotency, cancellation, and admin

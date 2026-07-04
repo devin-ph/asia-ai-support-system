@@ -35,7 +35,13 @@ python scripts/dev.py doctor
 python scripts/dev.py backend
 python scripts/dev.py frontend
 python scripts/dev.py test
+python scripts/dev.py verify
 ```
+
+Use `test` for the fast backend development loop. Run `verify` before every
+commit or pull request; it checks backend tests, frontend typecheck/build,
+runtime-state hygiene, obvious credential assignments, and Git diff
+whitespace.
 
 ## Safety Rules
 
@@ -56,6 +62,7 @@ A change is done only when:
 
 * The vertical slice still runs locally.
 * Relevant tests pass or a manual verification note is added.
+* `python scripts/dev.py verify` passes before commit or pull request.
 * API response shapes remain stable or docs are updated.
 * New behavior stays inside the v0.1 scope.
 * No secrets, real PII, generated build artifacts, or dependency folders are committed.
