@@ -209,6 +209,11 @@ tempCodeRunnerFile.py
 # Atomic demo JSON writes
 data/*.json.tmp
 
+# Frontend dependencies and build output
+frontend/node_modules/
+frontend/dist/
+*.tsbuildinfo
+
 # PyPI configuration file
 .pypirc
 
