@@ -4,13 +4,16 @@ Usage:
     python scripts/dev.py doctor    – verify local prerequisites
     python scripts/dev.py backend   – start the FastAPI dev server
     python scripts/dev.py frontend  – start the frontend dev server
-    python scripts/dev.py test      – run backend tests
+    python scripts/dev.py test      – run the fast backend test loop
+    python scripts/dev.py verify    – run full pre-commit verification
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -25,6 +28,22 @@ BACKEND_DIR = ROOT / "backend"
 FRONTEND_DIR = ROOT / "frontend"
 BACKEND_ENTRY = BACKEND_DIR / "app" / "main.py"
 FRONTEND_PKG = FRONTEND_DIR / "package.json"
+TICKET_SEED = ROOT / "data" / "fixtures" / "demo_tickets.seed.json"
+RUNTIME_TICKETS = ROOT / "var" / "demo_tickets.json"
+
+_OBVIOUS_SECRET_RE = re.compile(
+    r"""(?ix)
+    \b(
+        api[_-]?key
+        | client[_-]?secret
+        | password
+        | access[_-]?token
+        | auth[_-]?token
+    )\b
+    \s*[:=]\s*
+    ["'][^"'\r\n]{8,}["']
+    """
+)
 
 # ---------------------------------------------------------------------------
 # Colour helpers
@@ -242,7 +261,7 @@ def cmd_frontend(_args: argparse.Namespace) -> int:
 
 
 def cmd_test(_args: argparse.Namespace) -> int:
-    """Run backend tests with pytest, if available."""
+    """Run the fast backend test loop with pytest, if available."""
     tests_dir = BACKEND_DIR / "tests"
     has_tests = tests_dir.is_dir() and any(tests_dir.glob("test_*.py"))
 
@@ -268,6 +287,248 @@ def cmd_test(_args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Verify
+# ---------------------------------------------------------------------------
+
+
+def _run_verification_command(
+    label: str,
+    command: list[str],
+    *,
+    cwd: Path,
+) -> bool:
+    """Run one visible verification command and return whether it passed."""
+    print(f"\n{_bold(f'[{label}]')}", flush=True)
+    try:
+        result = subprocess.run(command, cwd=cwd)
+    except FileNotFoundError:
+        print(_red(f"{_FAIL} Command not found: {command[0]}"))
+        return False
+    except KeyboardInterrupt:
+        print(_red(f"\n{_FAIL} Verification interrupted."))
+        return False
+
+    if result.returncode == 0:
+        print(_green(f"{_OK} {label}"))
+        return True
+    print(_red(f"{_FAIL} {label} (exit code {result.returncode})"))
+    return False
+
+
+def _check_runtime_hygiene() -> bool:
+    """Ensure runtime state is ignored and the committed seed stays empty."""
+    print(f"\n{_bold('[Runtime hygiene]')}")
+    errors: list[str] = []
+
+    tracked = subprocess.run(
+        ["git", "ls-files", "--", "var"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if tracked.returncode != 0:
+        errors.append("Could not inspect tracked runtime files.")
+    elif tracked.stdout.strip():
+        errors.append("Files under var/ must not be tracked by Git.")
+
+    ignored = subprocess.run(
+        [
+            "git",
+            "check-ignore",
+            "-q",
+            "--",
+            str(RUNTIME_TICKETS.relative_to(ROOT)),
+        ],
+        cwd=ROOT,
+    )
+    if ignored.returncode != 0:
+        errors.append("var/demo_tickets.json is not ignored by Git.")
+
+    try:
+        seed = json.loads(TICKET_SEED.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        errors.append(f"Ticket seed cannot be read as JSON: {exc}")
+    else:
+        if seed != []:
+            errors.append(
+                "data/fixtures/demo_tickets.seed.json must remain an empty list."
+            )
+
+    if errors:
+        for error in errors:
+            print(_red(f"  {_FAIL} {error}"))
+        return False
+
+    print(_green(f"  {_OK} Runtime state is ignored; ticket seed is clean."))
+    return True
+
+
+def _candidate_files() -> tuple[Path, ...]:
+    """Return tracked and untracked non-ignored files for repository checks."""
+    result = subprocess.run(
+        [
+            "git",
+            "ls-files",
+            "-z",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError("git ls-files failed")
+    relative_paths = result.stdout.decode("utf-8").split("\0")
+    return tuple(ROOT / path for path in relative_paths if path)
+
+
+def _check_obvious_secrets() -> bool:
+    """Flag obvious quoted credential assignments without printing values."""
+    print(f"\n{_bold('[Obvious secret scan]')}")
+    findings: list[str] = []
+
+    try:
+        candidate_files = _candidate_files()
+    except RuntimeError as exc:
+        print(_red(f"  {_FAIL} {exc}"))
+        return False
+
+    for path in candidate_files:
+        try:
+            if path.stat().st_size > 1_000_000:
+                continue
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError):
+            continue
+
+        for line_number, line in enumerate(lines, start=1):
+            if _OBVIOUS_SECRET_RE.search(line):
+                findings.append(
+                    f"{path.relative_to(ROOT).as_posix()}:{line_number}"
+                )
+
+    if findings:
+        print(
+            _red(
+                f"  {_FAIL} Possible credential assignments found "
+                "(values intentionally hidden):"
+            )
+        )
+        for finding in findings:
+            print(f"    - {finding}")
+        return False
+
+    print(_green(f"  {_OK} No obvious credential assignments found."))
+    return True
+
+
+def _check_git_whitespace() -> bool:
+    """Check staged and unstaged diffs for whitespace errors."""
+    print(f"\n{_bold('[Git diff check]')}")
+    checks = (
+        ("unstaged", ["git", "diff", "--check"]),
+        ("staged", ["git", "diff", "--cached", "--check"]),
+    )
+    passed = True
+
+    for label, command in checks:
+        result = subprocess.run(
+            command,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            passed = False
+            print(_red(f"  {_FAIL} {label} diff has whitespace errors."))
+            if result.stdout.strip():
+                print(result.stdout.rstrip())
+            if result.stderr.strip():
+                print(result.stderr.rstrip())
+
+    if passed:
+        print(_green(f"  {_OK} Staged and unstaged diffs are clean."))
+    return passed
+
+
+def cmd_verify(_args: argparse.Namespace) -> int:
+    """Run the complete pre-commit and pre-PR verification suite."""
+    print(_bold("Running full project verification..."))
+    results: list[tuple[str, bool]] = []
+
+    results.append(
+        (
+            "Backend tests",
+            _run_verification_command(
+                "Backend tests",
+                [
+                    sys.executable,
+                    "-m",
+                    "pytest",
+                    "-v",
+                    str(BACKEND_DIR / "tests"),
+                ],
+                cwd=BACKEND_DIR,
+            ),
+        )
+    )
+
+    npm = _npm_command()
+    if npm is None:
+        print(_red(f"\n{_FAIL} npm not found on PATH."))
+        results.extend(
+            (
+                ("Frontend typecheck", False),
+                ("Frontend build", False),
+            )
+        )
+    else:
+        results.append(
+            (
+                "Frontend typecheck",
+                _run_verification_command(
+                    "Frontend typecheck",
+                    [npm, "run", "typecheck"],
+                    cwd=FRONTEND_DIR,
+                ),
+            )
+        )
+        results.append(
+            (
+                "Frontend build",
+                _run_verification_command(
+                    "Frontend build",
+                    [npm, "run", "build"],
+                    cwd=FRONTEND_DIR,
+                ),
+            )
+        )
+
+    results.extend(
+        (
+            ("Runtime hygiene", _check_runtime_hygiene()),
+            ("Obvious secret scan", _check_obvious_secrets()),
+            ("Git diff check", _check_git_whitespace()),
+        )
+    )
+
+    passed = sum(result for _label, result in results)
+    total = len(results)
+    print(f"\n{_bold('Verification summary')}")
+    for label, result in results:
+        marker = _green(_OK) if result else _red(_FAIL)
+        print(f"  {marker} {label}")
+    print(f"\n{passed}/{total} verification steps passed.")
+
+    if passed == total:
+        print(_green("\nReady to commit / ready for PR."))
+        return 0
+    print(_red("\nVerification failed. Fix the checks above and retry."))
+    return 1
+
+
+# ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
 
@@ -282,7 +543,8 @@ def main() -> int:
     sub.add_parser("doctor", help="Check local prerequisites")
     sub.add_parser("backend", help="Run FastAPI dev server")
     sub.add_parser("frontend", help="Run frontend dev server (npm)")
-    sub.add_parser("test", help="Run backend tests")
+    sub.add_parser("test", help="Run the fast backend test loop")
+    sub.add_parser("verify", help="Run full pre-commit verification")
 
     args = parser.parse_args()
 
@@ -291,6 +553,7 @@ def main() -> int:
         "backend": cmd_backend,
         "frontend": cmd_frontend,
         "test": cmd_test,
+        "verify": cmd_verify,
     }
 
     handler = dispatch.get(args.command)
