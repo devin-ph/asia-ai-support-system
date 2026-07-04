@@ -206,6 +206,9 @@ tempCodeRunnerFile.py
 # Ruff stuff:
 .ruff_cache/
 
+# Atomic demo JSON writes
+data/*.json.tmp
+
 # PyPI configuration file
 .pypirc
 

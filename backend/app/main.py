@@ -7,6 +7,9 @@ import uuid
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.intent import IntentLabel, analyze_message
+from app.order_service import lookup_order
+from app.policy_search import search_policy
 from app.schemas import (
     ActionConfirmRequest,
     ActionConfirmResponse,
@@ -15,18 +18,15 @@ from app.schemas import (
     ChatRequest,
     ChatResponse,
     HealthResponse,
-    IntentLabel,
 )
 from app.state import DemoState
-from app.support import (
-    GENERAL_REPLY,
-    answer_order,
-    answer_policy,
-    detect_intent,
-    detect_sentiment,
-)
 
 router = APIRouter(prefix="/api")
+
+GENERAL_REPLY = (
+    "Xin chào! Mình là A.S.I.A, trợ lý hỗ trợ khách hàng. Bạn có thể hỏi về "
+    "chính sách, tra cứu đơn hàng hoặc yêu cầu tạo phiếu hỗ trợ."
+)
 
 
 def _state(request: Request) -> DemoState:
@@ -43,21 +43,30 @@ async def health() -> HealthResponse:
 async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     """Handle one deterministic customer-support message."""
     state = _state(request)
-    intent = detect_intent(req.message)
-    sentiment = detect_sentiment(req.message)
+    analysis = analyze_message(req.message)
+    intent = analysis.intent
+    sentiment = analysis.sentiment
     reply = GENERAL_REPLY
     citations = []
     order = None
     actions = []
 
-    if intent == IntentLabel.POLICY_QUESTION:
+    if intent in {
+        IntentLabel.SHIPPING_POLICY,
+        IntentLabel.RETURN_REFUND,
+        IntentLabel.WARRANTY,
+    }:
         state.record_tool("policy_search")
-        reply, citations = answer_policy(req.message)
+        policy_result = search_policy(req.message)
+        reply = policy_result.answer
+        citations = list(policy_result.citations)
     elif intent == IntentLabel.ORDER_LOOKUP:
-        reply, order, lookup_performed = answer_order(req.message)
-        if lookup_performed:
+        order_result = lookup_order(req.message)
+        reply = order_result.answer
+        order = order_result.order
+        if order_result.lookup_performed:
             state.record_tool("order_lookup")
-    elif intent == IntentLabel.TICKET_CREATE:
+    elif intent == IntentLabel.TICKET_REQUEST:
         reply = (
             "Mình đã chuẩn bị một phiếu hỗ trợ nháp. "
             "Vui lòng kiểm tra và xác nhận trước khi tạo."

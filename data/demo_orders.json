@@ -1,7 +1,7 @@
 [
   {
     "order_id": "ASIA-1001",
-    "owner_customer_id": "CUS-DEMO-001",
+    "owner_customer_id": "demo-customer-001",
     "status": "Đang giao",
     "carrier": "Đơn vị vận chuyển Demo",
     "estimated_delivery": "2026-07-05",
@@ -10,7 +10,7 @@
   },
   {
     "order_id": "ASIA-1002",
-    "owner_customer_id": "CUS-DEMO-001",
+    "owner_customer_id": "demo-customer-001",
     "status": "Đã giao",
     "carrier": "Đơn vị vận chuyển Demo",
     "estimated_delivery": "2026-06-28",
@@ -18,8 +18,8 @@
     "last_updated": "2026-06-28T15:45:00+07:00"
   },
   {
-    "order_id": "ASIA-9001",
-    "owner_customer_id": "CUS-DEMO-999",
+    "order_id": "ASIA-9999",
+    "owner_customer_id": "demo-customer-999",
     "status": "Đang giao",
     "carrier": "Đơn vị vận chuyển Demo",
     "estimated_delivery": "2026-07-06",

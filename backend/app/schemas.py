@@ -7,22 +7,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
-class IntentLabel(str, enum.Enum):
-    """Supported user intent categories."""
-
-    POLICY_QUESTION = "policy_question"
-    ORDER_LOOKUP = "order_lookup"
-    TICKET_CREATE = "ticket_create"
-    GENERAL = "general"
-
-
-class SentimentLabel(str, enum.Enum):
-    """Coarse sentiment categories."""
-
-    POSITIVE = "positive"
-    NEUTRAL = "neutral"
-    NEGATIVE = "negative"
+from app.intent import IntentLabel, SentimentLabel
 
 
 class ActionStatus(str, enum.Enum):
@@ -47,13 +32,11 @@ class HealthResponse(BaseModel):
 
 
 class Citation(BaseModel):
-    """Evidence supporting a policy answer."""
+    """Reference to one trusted Markdown policy section."""
 
-    source: str = Field(..., examples=["data/policies.json#returns"])
-    snippet: str = Field(
-        ...,
-        examples=["Thời hạn yêu cầu đổi hoặc trả là 7 ngày."],
-    )
+    title: str = Field(..., examples=["Chính sách đổi trả và hoàn tiền"])
+    source: str = Field(..., examples=["docs/policies/return_policy.md"])
+    section: str = Field(..., examples=["Điều kiện và thời hạn đổi trả"])
 
 
 class OrderSummary(BaseModel):
@@ -135,4 +118,3 @@ class AdminOverview(BaseModel):
     sentiment_counts: dict[str, int] = Field(default_factory=dict)
     tool_calls: int = Field(default=0, ge=0)
     tool_counts: dict[str, int] = Field(default_factory=dict)
-

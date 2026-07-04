@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 import httpx
 import pytest
@@ -10,6 +11,7 @@ from fastapi import FastAPI
 
 from app.main import create_app
 from app.state import DemoState
+from app.storage import load_orders, load_tickets
 
 
 @pytest.fixture
@@ -18,8 +20,15 @@ def anyio_backend() -> str:
 
 
 @pytest.fixture
-def app() -> FastAPI:
-    return create_app(DemoState())
+def tickets_path(tmp_path: Path) -> Path:
+    path = tmp_path / "demo_tickets.json"
+    path.write_text("[]\n", encoding="utf-8")
+    return path
+
+
+@pytest.fixture
+def app(tickets_path: Path) -> FastAPI:
+    return create_app(DemoState(tickets_path=tickets_path))
 
 
 @pytest.fixture
@@ -66,15 +75,13 @@ async def test_policy_answer_is_grounded_for_vietnamese_text(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["intent"] == "policy_question"
+    assert body["intent"] == "return_refund"
     assert "7 ngày" in body["reply"]
     assert body["citations"] == [
         {
-            "source": "data/policies.json#returns",
-            "snippet": (
-                "Thời hạn yêu cầu đổi hoặc trả là 7 ngày kể từ khi đơn hàng "
-                "chuyển sang trạng thái Đã giao."
-            ),
+            "title": "Chính sách đổi trả và hoàn tiền",
+            "source": "docs/policies/return_policy.md",
+            "section": "Điều kiện và thời hạn đổi trả",
         }
     ]
 
@@ -85,11 +92,11 @@ async def test_policy_without_evidence_returns_insufficient_context(
 ) -> None:
     response = await client.post(
         "/api/chat",
-        json={"message": "Chính sách dành cho quà tặng là gì?"},
+        json={"message": "Có chính sách giao nhanh không?"},
     )
 
     body = response.json()
-    assert body["intent"] == "policy_question"
+    assert body["intent"] == "shipping_policy"
     assert "chưa có đủ thông tin" in body["reply"]
     assert body["citations"] == []
 
@@ -124,11 +131,11 @@ async def test_non_owned_and_unknown_orders_are_indistinguishable(
 ) -> None:
     non_owned = await client.post(
         "/api/chat",
-        json={"message": "Tra cứu ASIA-9001"},
+        json={"message": "Tra cứu ASIA-9999"},
     )
     unknown = await client.post(
         "/api/chat",
-        json={"message": "Tra cứu ASIA-9999"},
+        json={"message": "Tra cứu ASIA-8888"},
     )
 
     assert non_owned.status_code == 200
@@ -136,7 +143,7 @@ async def test_non_owned_and_unknown_orders_are_indistinguishable(
     assert non_owned.json()["order"] is None
     assert unknown.json()["order"] is None
     assert non_owned.json()["reply"] == unknown.json()["reply"]
-    assert "CUS-DEMO-999" not in non_owned.text
+    assert "demo-customer-999" not in non_owned.text
 
 
 @pytest.mark.anyio
@@ -157,6 +164,7 @@ async def test_order_prompt_without_id_does_not_call_lookup_tool(
 @pytest.mark.anyio
 async def test_ticket_requires_confirmation_and_is_idempotent(
     client: httpx.AsyncClient,
+    tickets_path: Path,
 ) -> None:
     draft = await client.post(
         "/api/chat",
@@ -182,6 +190,11 @@ async def test_ticket_requires_confirmation_and_is_idempotent(
     after = await client.get("/api/admin/overview")
     assert after.json()["total_tickets"] == 1
     assert after.json()["tool_counts"]["ticket_create"] == 1
+
+    persisted = load_tickets(tickets_path)
+    assert len(persisted) == 1
+    assert persisted[0].ticket_id == first.json()["ticket_id"]
+    assert DemoState(tickets_path=tickets_path).overview().total_tickets == 1
 
 
 @pytest.mark.anyio
@@ -226,10 +239,23 @@ async def test_admin_counts_intents_sentiment_and_tools(
     response = await client.get("/api/admin/overview")
     body = response.json()
     assert body["total_messages"] == 2
-    assert body["intent_counts"]["policy_question"] == 1
+    assert body["intent_counts"]["return_refund"] == 1
     assert body["intent_counts"]["order_lookup"] == 1
+    assert set(body["intent_counts"]) == {
+        "order_lookup",
+        "shipping_policy",
+        "return_refund",
+        "warranty",
+        "ticket_request",
+        "other",
+    }
     assert body["sentiment_counts"]["positive"] == 1
     assert body["sentiment_counts"]["negative"] == 1
+    assert set(body["sentiment_counts"]) == {
+        "positive",
+        "neutral",
+        "negative",
+    }
     assert body["tool_calls"] == 2
     assert body["tool_counts"] == {
         "policy_search": 1,
@@ -271,3 +297,12 @@ async def test_cors_allows_only_local_frontend(
         == "http://localhost:5173"
     )
     assert "access-control-allow-origin" not in denied.headers
+
+
+def test_synthetic_order_storage_contains_required_demo_ids() -> None:
+    orders = load_orders()
+    assert {order.order_id for order in orders} >= {
+        "ASIA-1001",
+        "ASIA-1002",
+        "ASIA-9999",
+    }
