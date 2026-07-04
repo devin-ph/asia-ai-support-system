@@ -67,8 +67,11 @@ Acceptance criteria:
 - Repeating a confirmation for the same action is idempotent and returns the
   original ticket ID without creating another ticket.
 - Confirming an already cancelled action does not create a ticket.
-- Confirmed tickets are stored in `data/demo_tickets.json`; pending actions
-  remain process-local and reset on restart.
+- Confirmed tickets are stored in the ignored local runtime file
+  `var/demo_tickets.json`; pending actions remain process-local and reset on
+  restart.
+- A fresh runtime store starts from the immutable
+  `data/fixtures/demo_tickets.seed.json` fixture.
 - `backend/app/ticket_service.py` owns the draft, decline, and idempotent
   confirmation lifecycle.
 
@@ -145,9 +148,10 @@ Included:
 
 - FastAPI and Pydantic
 - In-memory message, action, and counter state that resets on restart
-- Validated local JSON storage for synthetic orders and confirmed tickets
-- `data/demo_orders.json` as the read-only order fixture
-- `data/demo_tickets.json` as the confirmed-ticket store
+- Validated local JSON fixtures and runtime ticket storage
+- `data/fixtures/demo_orders.json` as the read-only order fixture
+- `data/fixtures/demo_tickets.seed.json` as the immutable empty ticket seed
+- `var/demo_tickets.json` as the ignored confirmed-ticket runtime store
 - Keyword search over allowlisted sections in `docs/policies/*.md`
 - Deterministic intent and sentiment classification
 - Repository-owned synthetic policy documents and order fixtures
@@ -175,7 +179,8 @@ Explicitly excluded:
 6. API and admin responses do not expose unsafe order fields or stored message
    content.
 7. Tests write tickets only to temporary files, never to the repository fixture.
-8. Secrets and credentials are never committed.
+8. Runtime ticket writes never mutate files under `data/fixtures/`.
+9. Secrets and credentials are never committed.
 
 ## Definition of Done
 

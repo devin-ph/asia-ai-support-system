@@ -206,8 +206,8 @@ tempCodeRunnerFile.py
 # Ruff stuff:
 .ruff_cache/
 
-# Atomic demo JSON writes
-data/*.json.tmp
+# Local runtime state
+/var/
 
 # Frontend dependencies and build output
 frontend/node_modules/

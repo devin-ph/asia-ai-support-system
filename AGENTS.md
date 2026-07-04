@@ -40,6 +40,8 @@ python scripts/dev.py test
 ## Safety Rules
 
 * Use synthetic data only.
+* Treat files under `data/fixtures/` as immutable repository fixtures.
+* Write local runtime state only under the ignored `var/` directory.
 * Never add real customer data or real PII.
 * Never commit secrets or API keys.
 * Do not expose write actions directly to a model or chat handler.
