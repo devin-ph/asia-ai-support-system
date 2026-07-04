@@ -68,6 +68,31 @@ async def test_health_and_blank_message_validation(
 
 
 @pytest.mark.anyio
+async def test_chat_rejects_removed_session_id(
+    client: httpx.AsyncClient,
+) -> None:
+    response = await client.post(
+        "/api/chat",
+        json={
+            "message": "Xin chào",
+            "session_id": "sess_not_supported",
+        },
+    )
+    openapi = await client.get("/openapi.json")
+
+    assert response.status_code == 422
+    assert any(
+        error["type"] == "extra_forbidden"
+        and error["loc"] == ["body", "session_id"]
+        for error in response.json()["detail"]
+    )
+    chat_request_schema = openapi.json()["components"]["schemas"][
+        "ChatRequest"
+    ]
+    assert set(chat_request_schema["properties"]) == {"message"}
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "message",
     [

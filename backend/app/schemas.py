@@ -86,19 +86,16 @@ class ToolEvent(BaseModel):
 class ChatRequest(BaseModel):
     """Request body for `POST /api/chat`."""
 
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        extra="forbid",
+    )
 
     message: str = Field(
         ...,
         min_length=1,
         max_length=2000,
         examples=["Chính sách đổi trả áp dụng trong bao lâu?"],
-    )
-    session_id: str | None = Field(
-        default=None,
-        min_length=1,
-        max_length=100,
-        examples=["sess_xyz789"],
     )
 
 

@@ -318,6 +318,8 @@ direct authority to execute it.
 - Intent and sentiment analysis use deterministic keyword rules.
 - Policy retrieval is keyword-based and limited to the small repository corpus.
 - The demo represents one fixed synthetic customer and has no authentication.
+- The API has no session or conversation persistence. Frontend conversation
+  turns are local UI state and reset when the page reloads.
 - Pending actions, messages, and aggregate counters are process-local and reset
   when the backend restarts.
 - Confirmed tickets persist to the ignored `var/demo_tickets.json` runtime
