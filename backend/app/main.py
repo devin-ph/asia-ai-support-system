@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
-
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -17,7 +15,12 @@ from app.schemas import (
     AdminOverview,
     ChatRequest,
     ChatResponse,
+    Citation,
     HealthResponse,
+    PendingAction,
+    ToolEvent,
+    ToolEventStatus,
+    ToolName,
 )
 from app.state import DemoState
 
@@ -46,10 +49,10 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     analysis = analyze_message(req.message)
     intent = analysis.intent
     sentiment = analysis.sentiment
-    reply = GENERAL_REPLY
-    citations = []
-    order = None
-    actions = []
+    assistant_message = GENERAL_REPLY
+    citations: list[Citation] = []
+    tool_events: list[ToolEvent] = []
+    pending_action: PendingAction | None = None
 
     if intent in {
         IntentLabel.SHIPPING_POLICY,
@@ -58,31 +61,49 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     }:
         state.record_tool("policy_search")
         policy_result = search_policy(req.message)
-        reply = policy_result.answer
+        assistant_message = policy_result.answer
         citations = list(policy_result.citations)
+        tool_events.append(
+            ToolEvent(
+                tool=ToolName.POLICY_SEARCH,
+                status=(
+                    ToolEventStatus.COMPLETED
+                    if citations
+                    else ToolEventStatus.INSUFFICIENT_CONTEXT
+                ),
+            )
+        )
     elif intent == IntentLabel.ORDER_LOOKUP:
         order_result = lookup_order(req.message)
-        reply = order_result.answer
-        order = order_result.order
+        assistant_message = order_result.answer
         if order_result.lookup_performed:
             state.record_tool("order_lookup")
+            tool_events.append(
+                ToolEvent(
+                    tool=ToolName.ORDER_LOOKUP,
+                    status=(
+                        ToolEventStatus.COMPLETED
+                        if order_result.order is not None
+                        else ToolEventStatus.NOT_FOUND
+                    ),
+                    order=order_result.order,
+                )
+            )
     elif intent == IntentLabel.TICKET_REQUEST:
-        reply = (
+        assistant_message = (
             "Mình đã chuẩn bị một phiếu hỗ trợ nháp. "
             "Vui lòng kiểm tra và xác nhận trước khi tạo."
         )
-        actions.append(state.draft_ticket(req.message))
+        pending_action = state.draft_ticket(req.message)
 
     state.record_message(intent, sentiment)
-    session_id = req.session_id or f"sess_{uuid.uuid4().hex[:12]}"
     return ChatResponse(
-        reply=reply,
+        assistant_message=assistant_message,
         intent=intent,
         sentiment=sentiment,
         citations=citations,
-        order=order,
-        actions=actions,
-        session_id=session_id,
+        tool_events=tool_events,
+        pending_action=pending_action,
     )
 
 

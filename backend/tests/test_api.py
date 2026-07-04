@@ -14,6 +14,17 @@ from app.state import DemoState
 from app.storage import load_orders, load_tickets
 
 
+def assert_stable_chat_shape(body: dict[str, object]) -> None:
+    assert set(body) == {
+        "assistant_message",
+        "intent",
+        "sentiment",
+        "citations",
+        "tool_events",
+        "pending_action",
+    }
+
+
 @pytest.fixture
 def anyio_backend() -> str:
     return "asyncio"
@@ -75,8 +86,9 @@ async def test_policy_answer_is_grounded_for_vietnamese_text(
 
     assert response.status_code == 200
     body = response.json()
+    assert_stable_chat_shape(body)
     assert body["intent"] == "return_refund"
-    assert "7 ngày" in body["reply"]
+    assert "7 ngày" in body["assistant_message"]
     assert body["citations"] == [
         {
             "title": "Chính sách đổi trả và hoàn tiền",
@@ -84,6 +96,14 @@ async def test_policy_answer_is_grounded_for_vietnamese_text(
             "section": "Điều kiện và thời hạn đổi trả",
         }
     ]
+    assert body["tool_events"] == [
+        {
+            "tool": "policy_search",
+            "status": "completed",
+            "order": None,
+        }
+    ]
+    assert body["pending_action"] is None
 
 
 @pytest.mark.anyio
@@ -97,8 +117,15 @@ async def test_policy_without_evidence_returns_insufficient_context(
 
     body = response.json()
     assert body["intent"] == "shipping_policy"
-    assert "chưa có đủ thông tin" in body["reply"]
+    assert "chưa có đủ thông tin" in body["assistant_message"]
     assert body["citations"] == []
+    assert body["tool_events"] == [
+        {
+            "tool": "policy_search",
+            "status": "insufficient_context",
+            "order": None,
+        }
+    ]
 
 
 @pytest.mark.anyio
@@ -112,8 +139,13 @@ async def test_owned_order_returns_only_safe_fields(
 
     assert response.status_code == 200
     body = response.json()
+    assert_stable_chat_shape(body)
     assert body["intent"] == "order_lookup"
-    assert set(body["order"]) == {
+    assert len(body["tool_events"]) == 1
+    event = body["tool_events"][0]
+    assert event["tool"] == "order_lookup"
+    assert event["status"] == "completed"
+    assert set(event["order"]) == {
         "order_id",
         "status",
         "carrier",
@@ -121,7 +153,8 @@ async def test_owned_order_returns_only_safe_fields(
         "items_count",
         "last_updated",
     }
-    assert body["order"]["order_id"] == "ASIA-1001"
+    assert event["order"]["order_id"] == "ASIA-1001"
+    assert body["pending_action"] is None
     assert "owner_customer_id" not in response.text
 
 
@@ -140,9 +173,18 @@ async def test_non_owned_and_unknown_orders_are_indistinguishable(
 
     assert non_owned.status_code == 200
     assert unknown.status_code == 200
-    assert non_owned.json()["order"] is None
-    assert unknown.json()["order"] is None
-    assert non_owned.json()["reply"] == unknown.json()["reply"]
+    assert non_owned.json()["tool_events"] == unknown.json()["tool_events"]
+    assert non_owned.json()["tool_events"] == [
+        {
+            "tool": "order_lookup",
+            "status": "not_found",
+            "order": None,
+        }
+    ]
+    assert (
+        non_owned.json()["assistant_message"]
+        == unknown.json()["assistant_message"]
+    )
     assert "demo-customer-999" not in non_owned.text
 
 
@@ -156,8 +198,9 @@ async def test_order_prompt_without_id_does_not_call_lookup_tool(
     )
     overview = await client.get("/api/admin/overview")
 
-    assert response.json()["order"] is None
-    assert "cung cấp mã đơn hàng" in response.json()["reply"]
+    assert response.json()["tool_events"] == []
+    assert "cung cấp mã đơn hàng" in response.json()["assistant_message"]
+    assert response.json()["pending_action"] is None
     assert overview.json()["tool_counts"]["order_lookup"] == 0
 
 
@@ -170,7 +213,10 @@ async def test_ticket_requires_confirmation_and_is_idempotent(
         "/api/chat",
         json={"message": "Tôi muốn tạo phiếu hỗ trợ vì sản phẩm bị lỗi"},
     )
-    action = draft.json()["actions"][0]
+    assert_stable_chat_shape(draft.json())
+    assert draft.json()["tool_events"] == []
+    action = draft.json()["pending_action"]
+    assert action is not None
     before = await client.get("/api/admin/overview")
     assert before.json()["total_tickets"] == 0
 
@@ -205,7 +251,9 @@ async def test_cancelled_ticket_cannot_be_confirmed_later(
         "/api/chat",
         json={"message": "Mở phiếu khiếu nại giúp tôi"},
     )
-    action_id = draft.json()["actions"][0]["action_id"]
+    action = draft.json()["pending_action"]
+    assert action is not None
+    action_id = action["action_id"]
 
     cancelled = await client.post(
         f"/api/actions/{action_id}/confirm",

@@ -24,6 +24,21 @@ class ActionType(str, enum.Enum):
     CREATE_TICKET = "create_ticket"
 
 
+class ToolName(str, enum.Enum):
+    """Read-only tools that may run during chat."""
+
+    POLICY_SEARCH = "policy_search"
+    ORDER_LOOKUP = "order_lookup"
+
+
+class ToolEventStatus(str, enum.Enum):
+    """Customer-safe outcomes for chat tool events."""
+
+    COMPLETED = "completed"
+    INSUFFICIENT_CONTEXT = "insufficient_context"
+    NOT_FOUND = "not_found"
+
+
 class HealthResponse(BaseModel):
     """Response for `GET /api/health`."""
 
@@ -60,6 +75,14 @@ class PendingAction(BaseModel):
     status: ActionStatus = ActionStatus.PENDING
 
 
+class ToolEvent(BaseModel):
+    """One observable, customer-safe chat tool execution."""
+
+    tool: ToolName
+    status: ToolEventStatus
+    order: OrderSummary | None = None
+
+
 class ChatRequest(BaseModel):
     """Request body for `POST /api/chat`."""
 
@@ -82,13 +105,12 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     """Stable response envelope for `POST /api/chat`."""
 
-    reply: str
+    assistant_message: str
     intent: IntentLabel
     sentiment: SentimentLabel
     citations: list[Citation] = Field(default_factory=list)
-    order: OrderSummary | None = None
-    actions: list[PendingAction] = Field(default_factory=list)
-    session_id: str
+    tool_events: list[ToolEvent] = Field(default_factory=list)
+    pending_action: PendingAction | None = None
 
 
 class ActionConfirmRequest(BaseModel):
