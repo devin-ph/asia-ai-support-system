@@ -80,7 +80,7 @@ instead of proceeding.
 
 ## Git Behavior
 
-Use a branch-first, human-commit workflow that keeps `main` runnable and
+Use a branch-first, review-first workflow that keeps `main` runnable and
 demo-ready. Follow `docs/dev-workflow.md` for branch prefixes, detailed Git
 commands, commit guidance, and merge and cleanup procedures.
 
@@ -111,22 +111,22 @@ Before handing work back, the agent must:
 * Group changed files into logical commits and suggest Conventional Commit
   messages.
 
-After completing work, first provide a concise reviewer note, then provide the structured handoff block.
+After completing work, the agent must provide a review summary followed by a commit proposal.
 
-The reviewer note should cover:
+The review summary should be natural language. Briefly explain what changed,
+why it changed, what to pay attention to, verification results, and any follow-up
+if relevant.
 
-* Key decisions made.
-* Trade-offs or alternatives considered, if any.
-* Files or behavior the reviewer should pay special attention to.
-* Suggested follow-up, if applicable.
-
-Then provide the structured handoff exactly in this format:
+The commit proposal should use this lightweight structure:
 
 ```text
-Changed files:
-  Commit 1 – "<type>(optional-scope): <short description>"
-    - <file>
-    - <file>
+Commit 1 – "<type>(optional-scope): <short description>"
+  - <file>
+  - <file>
+
+Commit 2 – "<type>(optional-scope): <short description>"
+  - <file>
+  - <file>
 
 Suggested merge commit:
   "merge: <short summary>"
