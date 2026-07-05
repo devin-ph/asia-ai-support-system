@@ -6,14 +6,15 @@ This project uses a lightweight branch-based workflow to keep `main` stable and 
 
 * `main` must stay stable, runnable, and demo-ready.
 * Do not commit experimental or half-broken work directly to `main`.
-* Use a short-lived branch for every agent-authored change.
+* Use a short-lived branch for every proposed change.
 
 Use branch prefixes consistently:
 
 * `feat/...` for real product features.
 * `fix/...` for bug fixes.
+* `docs/...` for README, AGENTS.md, walkthroughs, architecture notes, and other documentation.
 * `test/...` for adding or updating tests.
-* `chore/...` for tooling, harnessing, setup, verification scripts, dependency/config cleanup.
+* `chore/...` for tooling, scripts, config, maintenance, dependency/config cleanup.
 * `refactor/...` for code structure changes that should not alter behavior.
 * `ci/...` for CI/CD workflow changes.
 
@@ -21,6 +22,7 @@ Examples:
 
 * `chore/v0.1.1-alignment`
 * `fix/runtime-ticket-storage`
+* `docs/clarify-demo-scope`
 * `test/frontend-confirmation-flow`
 * `ci/github-actions-verify`
 * `refactor/provider-boundaries`
@@ -87,12 +89,13 @@ committing automatically.
 
 Use one commit when the changes are part of one logical unit. Split commits when
 there are clearly separate purposes, such as implementation, tests, docs, or
-workflow/tooling. Use the exact handoff format defined in the root `AGENTS.md`
-so the plan stays consistent across tasks.
+workflow/tooling.
 
-## Agent-assisted work
+See the root `AGENTS.md` for review summary and commit proposal guidance.
 
-For agent-assisted work, keep the workflow simple: make changes on a short-lived
+## Assisted workflows
+
+For assisted workflows, keep the workflow simple: make changes on a short-lived
 branch, run relevant checks, then stop before committing. The agent should
 suggest commit grouping and messages, but the human decides when to commit,
 push, and merge.
@@ -125,7 +128,8 @@ Rules:
 * A trivial documentation change, as defined above, may use a short manual
   verification note instead of the full verification command.
 
-Final handoff should include a short reviewer note followed by the structured handoff format defined in `AGENTS.md`.
+Final response should include a natural review summary followed by a lightweight
+commit proposal as described in the root `AGENTS.md`.
 
 ## Branch cleanup
 
@@ -182,15 +186,7 @@ After remote cleanup, sync/prune stale remote-tracking references:
 git fetch --prune origin
 ```
 
-Do not delete:
-
-main;
-the current branch;
-unmerged branches that still contain useful work;
-milestone tags;
-branches that intentionally preserve a long-running experiment.
-
-Use git branch -D only when intentionally discarding or cleaning up work that
+Use `git branch -D` only when intentionally discarding or cleaning up work that
 has already been accounted for.
 
 Do not delete:
