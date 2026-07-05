@@ -26,7 +26,7 @@ Read documents in this order:
 
 Do not implement features outside `docs/demo-scope.md` unless the user explicitly requests them.
 
-## Standard Commands
+## Commands
 
 Use these commands when possible:
 
@@ -79,6 +79,28 @@ Use branch prefixes:
 * `ci/...`
 
 For detailed Git commands, see `docs/dev-workflow.md`.
+
+## Git Behavior
+
+When completing a non-trivial task, treat commit and push as part of the normal completion flow, unless the user says otherwise.
+
+Should:
+
+* Summarize the intentional changes.
+* Run relevant verification commands when possible.
+* Commit only intentional tracked changes.
+* Use Conventional Commits for the commit message.
+* Push the current working branch to `origin` if authentication is available.
+* Report the branch name, commit hash, verification result, and push result.
+
+Should not:
+
+* Push directly to `main`.
+* Merge into `main` unless the user explicitly asks.
+* Commit secrets, real PII, generated build artifacts, dependency folders, runtime state, or unrelated local changes.
+* Commit after failed verification unless the user explicitly asks for a work-in-progress commit.
+
+For the detailed command sequence, see `docs/dev-workflow.md`.
 
 ## Definition of Done
 

@@ -1,6 +1,6 @@
 # Git Workflow Rules
 
-This project uses a lightweight branch-based workflow to keep main stable and demo-ready.
+This project uses a lightweight branch-based workflow to keep `main` stable and demo-ready.
 
 ## Branch roles
 
@@ -70,6 +70,39 @@ git commit -m "test(frontend): cover confirmation flow"
 git commit -m "chore(verify): add unified verification command"
 ```
 
+## Completion flow
+
+For normal implementation tasks, should finish by committing the intentional changes and pushing the current working branch, unless the user says otherwise.
+
+Recommended command sequence:
+
+```bash
+git status
+python scripts/dev.py verify
+git add <intentional-files>
+git commit -m "<type>(<scope>): <short description>"
+git push -u origin <current-branch>
+```
+
+Rules:
+
+* Commit only intentional tracked changes.
+* Use a Conventional Commits message.
+* Push the current branch to `origin` when authentication is available.
+* Do not push directly to `main`.
+* Do not merge into `main` unless the user explicitly asks.
+* Do not commit secrets, real PII, generated build artifacts, dependency folders, runtime state, or unrelated local changes.
+* If verification fails, stop and report the failure. Do not commit unless the user explicitly asks for a work-in-progress commit.
+* For docs-only changes, full verification may be replaced with a short manual verification note.
+
+After finishing, report:
+
+* changed files;
+* verification result;
+* commit hash;
+* pushed branch;
+* any remaining manual follow-up.
+
 ## Before merging to main
 
 Run the project verification commands documented in this repo.
@@ -82,7 +115,7 @@ python scripts/dev.py verify
 
 Only merge when:
 
-* the working tree is clean except for intentional changes;
+* the working tree is clean after committing intentional changes;
 * backend tests pass;
 * frontend typecheck/build pass;
 * demo-critical flows are not broken;
