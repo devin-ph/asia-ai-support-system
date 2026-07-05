@@ -5,6 +5,7 @@ Usage:
     python scripts/dev.py backend   – start the FastAPI dev server
     python scripts/dev.py frontend  – start the frontend dev server
     python scripts/dev.py test      – run backend and frontend tests
+    python scripts/dev.py eval      – measure the deterministic baseline
     python scripts/dev.py verify    – run full pre-commit verification
 """
 
@@ -31,6 +32,8 @@ BACKEND_ENTRY = BACKEND_DIR / "app" / "main.py"
 FRONTEND_PKG = FRONTEND_DIR / "package.json"
 FRONTEND_LOCK = FRONTEND_DIR / "package-lock.json"
 FRONTEND_NODE_MODULES = FRONTEND_DIR / "node_modules"
+EVALUATION_SCRIPT = ROOT / "scripts" / "evaluate.py"
+EVALUATION_BASELINE = ROOT / "eval" / "baseline.v0.1.json"
 RUNTIME_DIR = ROOT / "var"
 TICKET_SEED = ROOT / "data" / "fixtures" / "demo_tickets.seed.json"
 RUNTIME_TICKETS = RUNTIME_DIR / "demo_tickets.json"
@@ -518,6 +521,23 @@ def cmd_test(_args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Evaluation
+# ---------------------------------------------------------------------------
+
+
+def cmd_eval(_args: argparse.Namespace) -> int:
+    """Measure deterministic behavior against the versioned JSONL cases."""
+    try:
+        return subprocess.run(
+            [sys.executable, str(EVALUATION_SCRIPT)],
+            cwd=ROOT,
+        ).returncode
+    except KeyboardInterrupt:
+        print(_red(f"\n{_FAIL} Evaluation interrupted."))
+        return 1
+
+
+# ---------------------------------------------------------------------------
 # Verify
 # ---------------------------------------------------------------------------
 
@@ -704,6 +724,21 @@ def cmd_verify(_args: argparse.Namespace) -> int:
             ),
         )
     )
+    results.append(
+        (
+            "Deterministic evaluation",
+            _run_verification_command(
+                "Deterministic evaluation",
+                [
+                    sys.executable,
+                    str(EVALUATION_SCRIPT),
+                    "--check-baseline",
+                    str(EVALUATION_BASELINE),
+                ],
+                cwd=ROOT,
+            ),
+        )
+    )
 
     npm = _npm_command()
     if npm is None:
@@ -786,6 +821,7 @@ def main() -> int:
     sub.add_parser("backend", help="Run FastAPI dev server")
     sub.add_parser("frontend", help="Run frontend dev server (npm)")
     sub.add_parser("test", help="Run backend and frontend tests")
+    sub.add_parser("eval", help="Measure the deterministic baseline")
     sub.add_parser("verify", help="Run full pre-commit verification")
 
     args = parser.parse_args()
@@ -795,6 +831,7 @@ def main() -> int:
         "backend": cmd_backend,
         "frontend": cmd_frontend,
         "test": cmd_test,
+        "eval": cmd_eval,
         "verify": cmd_verify,
     }
 

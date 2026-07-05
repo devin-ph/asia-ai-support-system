@@ -19,6 +19,7 @@ The backend implements the deterministic API contract for the
 - `app/storage.py`: validated JSON loading and atomic ticket writes.
 - `app/ticket_service.py`: pending actions and idempotent ticket confirmation.
 - `tests/`: API contract and safety tests.
+- `../eval/`: versioned JSONL behavior cases and deterministic baseline.
 - `../data/fixtures/`: immutable synthetic JSON fixtures.
 - `../var/`: ignored local runtime state.
 
@@ -91,11 +92,14 @@ Run:
 
 ```bash
 python scripts/dev.py test
+python scripts/dev.py eval
 ```
 
 This runs the backend suite plus the frontend unit/component suite. For a
 backend-only iteration, run `python -m pytest backend/tests` from the repository
-root. Before committing or opening a pull request, run the full repository
+root. The separate `eval` command reports product-level deterministic metrics;
+known rule misses are valid baseline results rather than unit-test failures.
+Before committing or opening a pull request, run the full repository
 verification:
 
 ```bash

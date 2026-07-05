@@ -1,0 +1,24 @@
+{"id":"intent-001","text":"Tra cứu đơn hàng ASIA-1001 giúp tôi","expected_intent":"order_lookup"}
+{"id":"intent-002","text":"Mã đơn của mình là ASIA 1002","expected_intent":"order_lookup"}
+{"id":"intent-003","text":"Đơn của tôi tới đâu rồi?","expected_intent":"order_lookup"}
+{"id":"intent-004","text":"Chính sách giao hàng như thế nào?","expected_intent":"shipping_policy"}
+{"id":"intent-005","text":"Phí vận chuyển bao nhiêu?","expected_intent":"shipping_policy"}
+{"id":"intent-006","text":"Thoi gian giao hang mat bao lau?","expected_intent":"shipping_policy"}
+{"id":"intent-007","text":"Shop có ship quốc tế không?","expected_intent":"shipping_policy"}
+{"id":"intent-008","text":"Tôi muốn đổi trả sản phẩm","expected_intent":"return_refund"}
+{"id":"intent-009","text":"Bao lâu thì tôi được hoàn tiền?","expected_intent":"return_refund"}
+{"id":"intent-010","text":"Chinh sach doi tra la gi?","expected_intent":"return_refund"}
+{"id":"intent-011","text":"Mình muốn đổi size áo","expected_intent":"return_refund"}
+{"id":"intent-012","text":"Sản phẩm được bảo hành bao lâu?","expected_intent":"warranty"}
+{"id":"intent-013","text":"What is the warranty policy?","expected_intent":"warranty"}
+{"id":"intent-014","text":"Hàng bị lỗi sau ba ngày thì xử lý sao?","expected_intent":"warranty"}
+{"id":"intent-015","text":"Tạo phiếu hỗ trợ giúp tôi","expected_intent":"ticket_request"}
+{"id":"intent-016","text":"Tôi muốn khiếu nại đơn này","expected_intent":"ticket_request"}
+{"id":"intent-017","text":"Please open a ticket for me","expected_intent":"ticket_request"}
+{"id":"intent-018","text":"Gửi yêu cầu hỗ trợ cho nhân viên giúp mình","expected_intent":"ticket_request"}
+{"id":"intent-019","text":"Xin chào A.S.I.A","expected_intent":"other"}
+{"id":"intent-020","text":"Cảm ơn bạn đã hỗ trợ rất tốt","expected_intent":"other"}
+{"id":"intent-021","text":"Sản phẩm này có màu xanh không?","expected_intent":"other"}
+{"id":"intent-022","text":"Tracking ASIA-9999","expected_intent":"order_lookup"}
+{"id":"intent-023","text":"Tạo ticket để yêu cầu hoàn tiền","expected_intent":"ticket_request"}
+{"id":"intent-024","text":"Tôi không hài lòng về bảo hành","expected_intent":"warranty"}

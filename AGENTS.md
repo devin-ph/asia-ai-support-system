@@ -35,6 +35,7 @@ python scripts/dev.py doctor
 python scripts/dev.py backend
 python scripts/dev.py frontend
 python scripts/dev.py test
+python scripts/dev.py eval
 python scripts/dev.py verify
 ```
 
@@ -44,8 +45,9 @@ backend importability, frontend scripts, and writable local state rather than
 only checking whether executables exist.
 
 Use `test` for the fast backend and frontend unit/component test loop. Use
-`verify` before commit or pull request to add frontend typecheck/build and
-repository hygiene checks.
+`eval` to measure the versioned deterministic baseline. Use `verify` before
+commit or pull request to add the baseline drift check, frontend
+typecheck/build, and repository hygiene checks.
 
 ## Safety Rules
 

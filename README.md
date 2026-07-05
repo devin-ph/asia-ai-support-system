@@ -148,11 +148,24 @@ Before committing or opening a pull request, run the full-project verification:
 python scripts/dev.py verify
 ```
 
-`verify` runs backend and frontend tests, frontend typecheck and production
-build, validates runtime/fixture Git hygiene, scans candidate files for obvious
-credential assignments without printing values, and checks staged and unstaged
-diffs for whitespace errors. Lint and format checks are not included until the
-project adopts those tools explicitly.
+To inspect the product-level deterministic baseline separately:
+
+```bash
+python scripts/dev.py eval
+```
+
+`eval` runs the versioned synthetic cases under [`eval/`](eval/README.md) and
+reports intent accuracy, policy-section hit rate, insufficient-context
+precision, order-ID extraction accuracy, and confirmation-guardrail pass rate.
+Known misses remain visible; this is a benchmark, not a test that is expected
+to score 100%.
+
+`verify` runs backend and frontend tests, checks the committed evaluation
+snapshot for drift, runs frontend typecheck and production build, validates
+runtime/fixture Git hygiene, scans candidate files for obvious credential
+assignments without printing values, and checks staged and unstaged diffs for
+whitespace errors. Lint and format checks are not included until the project
+adopts those tools explicitly.
 
 ## Demo script
 
@@ -265,14 +278,16 @@ python scripts/dev.py doctor
 python scripts/dev.py backend
 python scripts/dev.py frontend
 python scripts/dev.py test
+python scripts/dev.py eval
 python scripts/dev.py verify
 ```
 
-`test` runs the fast backend and frontend unit/component suites. `verify` is the
-full-stack “ready to commit / ready for PR” gate and additionally runs
-typecheck, production build, and repository hygiene checks. This keeps the
-local test loop useful without making it pay the cost of a frontend production
-build.
+`test` runs the fast backend and frontend unit/component suites. `eval` measures
+the deterministic product baseline against versioned JSONL cases. `verify` is
+the full-stack “ready to commit / ready for PR” gate and additionally checks the
+baseline snapshot, typecheck, production build, and repository hygiene. This
+keeps the local test loop useful without making it pay the cost of a frontend
+production build.
 
 ### Fake providers: deterministic local stand-ins
 
@@ -290,6 +305,19 @@ later milestone:
 These stand-ins are fast, inspectable, testable, and offline. Future providers
 should preserve the same public contracts and safety behavior so they can be
 evaluated against the deterministic baseline.
+
+### Evaluation before AI: prove the delta
+
+[`eval/`](eval/README.md) contains versioned Vietnamese intent, policy, order,
+and ticket-flow cases. [`scripts/evaluate.py`](scripts/evaluate.py) runs the
+current local services against the same ground truth and records the v0.1
+scores in `eval/baseline.v0.1.json`.
+
+The baseline deliberately includes natural paraphrases that keyword rules do
+not yet handle. A future LLM or retrieval provider should be evaluated on these
+same cases and must improve useful metrics without reducing the 100%
+confirmation-guardrail result. Dataset changes and implementation changes
+should be reviewed separately where practical to avoid moving the goalposts.
 
 ### Synthetic data: safe fixtures by construction
 
@@ -343,10 +371,10 @@ direct authority to execute it.
 The next milestone should preserve the v0.1 contracts and guardrails while
 replacing local stand-ins incrementally:
 
-1. Formalize provider interfaces and contract tests around the deterministic
-   baseline.
-2. Expand policy fixtures, Vietnamese evaluation cases, and frontend test
-   coverage.
+1. Formalize provider interfaces and run candidate providers against the
+   committed deterministic baseline.
+2. Expand policy fixtures and Vietnamese evaluation coverage without replacing
+   known hard cases merely to improve scores.
 3. Add real authentication and tenant isolation before connecting any commerce
    data.
 4. Move durable actions, tickets, idempotency records, and audit events to

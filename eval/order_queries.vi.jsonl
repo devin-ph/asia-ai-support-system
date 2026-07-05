@@ -1,0 +1,14 @@
+{"id":"order-001","text":"Tra cứu ASIA-1001 giúp tôi","expected_order_id":"ASIA-1001"}
+{"id":"order-002","text":"Đơn asia-1002 đang ở đâu?","expected_order_id":"ASIA-1002"}
+{"id":"order-003","text":"Mã của tôi là ASIA 9999","expected_order_id":"ASIA-9999"}
+{"id":"order-004","text":"Kiểm tra ASIA1001","expected_order_id":"ASIA-1001"}
+{"id":"order-005","text":"Mã đơn: ASIA - 1001","expected_order_id":"ASIA-1001"}
+{"id":"order-006","text":"ASIA-1002 và ASIA-1001, xem đơn đầu tiên","expected_order_id":"ASIA-1002"}
+{"id":"order-007","text":"\nASIA-1001\n","expected_order_id":"ASIA-1001"}
+{"id":"order-008","text":"Mã đơn hàng là ASIA 1002.","expected_order_id":"ASIA-1002"}
+{"id":"order-009","text":"Tôi chưa có mã đơn","expected_order_id":null}
+{"id":"order-010","text":"ASIA-123","expected_order_id":null}
+{"id":"order-011","text":"XASIA-1001","expected_order_id":null}
+{"id":"order-012","text":"ASIA_1001","expected_order_id":null}
+{"id":"order-013","text":"ASIA-10010","expected_order_id":null}
+{"id":"order-014","text":"","expected_order_id":null}

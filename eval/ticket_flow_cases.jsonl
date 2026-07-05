@@ -1,0 +1,7 @@
+{"id":"ticket-001","summary":"Sản phẩm demo bị lỗi","mode":"sequential","decisions":[],"expected_statuses":[],"expected_repeated":[],"expected_ticket_count":0}
+{"id":"ticket-002","summary":"Cần hỗ trợ đổi sản phẩm demo","mode":"sequential","decisions":[true],"expected_statuses":["confirmed"],"expected_repeated":[false],"expected_ticket_count":1}
+{"id":"ticket-003","summary":"Không nhận được đơn demo","mode":"sequential","decisions":[true,true],"expected_statuses":["confirmed","confirmed"],"expected_repeated":[false,true],"expected_ticket_count":1,"expect_same_ticket_id":true}
+{"id":"ticket-004","summary":"Muốn hủy yêu cầu hỗ trợ demo","mode":"sequential","decisions":[false],"expected_statuses":["cancelled"],"expected_repeated":[false],"expected_ticket_count":0}
+{"id":"ticket-005","summary":"Yêu cầu demo bị từ chối","mode":"sequential","decisions":[false,true],"expected_statuses":["cancelled","cancelled"],"expected_repeated":[false,true],"expected_ticket_count":0}
+{"id":"ticket-006","summary":"Hai lượt xác nhận đồng thời","mode":"concurrent","decisions":[true,true],"expected_statuses":["confirmed","confirmed"],"expected_ticket_count":1,"expect_same_ticket_id":true}
+{"id":"ticket-007","summary":"Không được xác nhận action không tồn tại","mode":"unknown_action","decisions":[true],"expected_statuses":[null],"expected_ticket_count":0}
