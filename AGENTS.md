@@ -82,7 +82,7 @@ instead of proceeding.
 
 Use a branch-first, review-first workflow that keeps `main` runnable and
 demo-ready. Follow `docs/dev-workflow.md` for branch prefixes, detailed Git
-commands, commit guidance, and merge and cleanup procedures.
+commands, commit guidance, and merge procedures.
 
 The agent may create or switch to an appropriate short-lived branch, make the
 requested changes, and run relevant checks. By default, the agent must not
@@ -117,19 +117,27 @@ The review summary should be natural language. Briefly explain what changed,
 why it changed, what to pay attention to, verification results, and any follow-up
 if relevant.
 
-The commit proposal should use this lightweight structure:
+**Commit proposal** should provide copyable shell commands for each suggested
+commit. Use explicit file paths instead of `git add .`.
 
-```text
-Commit 1 – "<type>(optional-scope): <short description>"
-  - <file>
-  - <file>
+```bash
+git add -- <file> <file>
+git commit -m "<type>(optional-scope): <short description>"
+```
 
-Commit 2 – "<type>(optional-scope): <short description>"
-  - <file>
-  - <file>
+For multiple commits, provide one command block per commit:
 
-Suggested merge commit:
-  "merge: <short summary>"
+```bash
+git add -- <file> <file>
+git commit -m "<type>(optional-scope): <short description>"
+git add -- <file> <file>
+git commit -m "<type>(optional-scope): <short description>"
+```
+
+Then suggest the merge commit message:
+
+```bash
+git merge --no-ff <branch-name> -m "merge: <short summary>"
 ```
 
 Must not:
