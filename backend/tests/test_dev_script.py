@@ -133,6 +133,54 @@ def test_runtime_directory_must_be_writable(
     assert tuple(runtime_dir.iterdir()) == ()
 
 
+def test_requirement_lock_accepts_only_exact_pins(tmp_path: Path) -> None:
+    lock_path = tmp_path / "requirements.txt"
+    lock_path.write_text(
+        "# generated\nfastapi==0.139.0\npydantic-core==2.46.4\n",
+        encoding="utf-8",
+    )
+
+    assert DEV._load_requirement_pins(lock_path) == {
+        "fastapi": "0.139.0",
+        "pydantic-core": "2.46.4",
+    }
+
+    lock_path.write_text("fastapi>=0.115,<1\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="non-pinned"):
+        DEV._load_requirement_pins(lock_path)
+
+
+def test_backend_dependency_lock_detects_installed_version_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lock_path = tmp_path / "requirements.txt"
+    lock_path.write_text("fastapi==0.139.0\n", encoding="utf-8")
+    monkeypatch.setattr(DEV, "BACKEND_REQUIREMENTS_LOCK", lock_path)
+    monkeypatch.setattr(
+        DEV.importlib.metadata,
+        "version",
+        lambda _name: "0.138.0",
+    )
+
+    assert DEV._check_backend_dependency_lock() is False
+
+
+def test_pip_consistency_uses_active_interpreter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def pip_check(
+        command: list[str],
+        **_kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        assert command == [DEV.sys.executable, "-m", "pip", "check"]
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(DEV.subprocess, "run", pip_check)
+
+    assert DEV._check_pip_consistency() is True
+
+
 def test_git_whitespace_check_is_separate_from_working_tree_status(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

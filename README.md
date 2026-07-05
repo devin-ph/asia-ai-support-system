@@ -98,10 +98,30 @@ python scripts/dev.py doctor
 ```
 
 `doctor` validates the Python and Node versions, npm, backend dependencies and
-application import, the frontend lockfile/scripts/installed dependencies,
-writable local runtime storage, and the current `.env` contract. If
+their exact locked versions, application import, the frontend
+lockfile/scripts/installed dependencies, writable local runtime storage, and
+the current `.env` contract. If backend dependencies do not match the lock,
+rerun `python -m pip install -r backend/requirements.txt`. If
 `frontend/node_modules` is missing or incomplete, run `npm ci` inside
 `frontend/`.
+
+### Update backend dependencies
+
+[`backend/requirements.in`](backend/requirements.in) contains the direct
+backend and test dependencies. [`backend/requirements.txt`](backend/requirements.txt)
+is the generated, fully pinned install lock; do not edit it by hand.
+
+To intentionally update the lock:
+
+```bash
+python -m pip install pip-tools
+python -m piptools compile --strip-extras backend/requirements.in -o backend/requirements.txt
+python -m piptools sync backend/requirements.txt
+python -m pip check
+```
+
+Review dependency updates together with the full verification result before
+committing the regenerated lock.
 
 ### Start the backend
 

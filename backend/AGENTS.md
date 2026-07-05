@@ -125,3 +125,8 @@ depend on execution order.
 - Do not log request bodies or action payloads.
 - Add dependencies only when the standard library and current stack are
   insufficient.
+- Declare direct dependencies in `requirements.in`. Regenerate the fully pinned
+  `requirements.txt` with the documented pip-tools command; do not edit the
+  lock by hand.
+- Install backend dependencies only from `requirements.txt`, then run
+  `python -m pip check`.
