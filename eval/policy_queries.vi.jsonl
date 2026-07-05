@@ -1,0 +1,17 @@
+{"id":"policy-001","query":"Đổi trả trong mấy ngày?","expected_policy":"return_policy.md","expected_section":"Điều kiện và thời hạn đổi trả"}
+{"id":"policy-002","query":"Hàng lỗi sau 3 ngày thì sao?","expected_policy":"warranty_policy.md","expected_section":"Phạm vi và thời hạn bảo hành"}
+{"id":"policy-003","query":"Shop có ship quốc tế không?","expected":"insufficient_context"}
+{"id":"policy-004","query":"Thời gian giao hàng dự kiến là bao lâu?","expected_policy":"shipping_policy.md","expected_section":"Thời gian giao hàng"}
+{"id":"policy-005","query":"Phí vận chuyển được tính thế nào?","expected_policy":"shipping_policy.md","expected_section":"Phí giao hàng"}
+{"id":"policy-006","query":"Tôi theo dõi giao hàng ở đâu?","expected_policy":"shipping_policy.md","expected_section":"Theo dõi hành trình"}
+{"id":"policy-007","query":"Điều kiện trả hàng là gì?","expected_policy":"return_policy.md","expected_section":"Điều kiện và thời hạn đổi trả"}
+{"id":"policy-008","query":"Thời gian hoàn tiền mất mấy ngày?","expected_policy":"return_policy.md","expected_section":"Thời gian hoàn tiền"}
+{"id":"policy-009","query":"Phạm vi bảo hành của sản phẩm thế nào?","expected_policy":"warranty_policy.md","expected_section":"Phạm vi và thời hạn bảo hành"}
+{"id":"policy-010","query":"Cần gì để bảo hành sản phẩm?","expected_policy":"warranty_policy.md","expected_section":"Yêu cầu tiếp nhận bảo hành"}
+{"id":"policy-011","query":"Phi giao hang duoc tinh ra sao?","expected_policy":"shipping_policy.md","expected_section":"Phí giao hàng"}
+{"id":"policy-012","query":"Bao lau thi duoc hoan tien?","expected_policy":"return_policy.md","expected_section":"Thời gian hoàn tiền"}
+{"id":"policy-013","query":"Đổi size áo được không?","expected_policy":"return_policy.md","expected_section":"Điều kiện và thời hạn đổi trả"}
+{"id":"policy-014","query":"Bao giờ tiền về tài khoản?","expected_policy":"return_policy.md","expected_section":"Thời gian hoàn tiền"}
+{"id":"policy-015","query":"Có được kiểm hàng trước khi thanh toán COD không?","expected":"insufficient_context"}
+{"id":"policy-016","query":"Shop có xuất hóa đơn VAT không?","expected":"insufficient_context"}
+{"id":"policy-017","query":"Shop có hướng dẫn nấu ăn không?","expected":"insufficient_context"}

@@ -1,0 +1,31 @@
+{
+  "baseline_id": "deterministic-v0.1",
+  "evaluator_schema_version": 1,
+  "metrics": {
+    "intent_accuracy": {
+      "score": 0.791667,
+      "passed": 19,
+      "total": 24
+    },
+    "policy_section_hit_rate": {
+      "score": 0.769231,
+      "passed": 10,
+      "total": 13
+    },
+    "insufficient_context_precision": {
+      "score": 0.571429,
+      "passed": 4,
+      "total": 7
+    },
+    "order_id_extraction_accuracy": {
+      "score": 0.928571,
+      "passed": 13,
+      "total": 14
+    },
+    "confirmation_guardrail_pass_rate": {
+      "score": 1.0,
+      "passed": 7,
+      "total": 7
+    }
+  }
+}

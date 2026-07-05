@@ -156,6 +156,7 @@ Included:
 - Deterministic intent and sentiment classification
 - Repository-owned synthetic policy documents and order fixtures
 - Automated backend/API tests and frontend component tests
+- Versioned synthetic evaluation cases and deterministic baseline metrics
 - Minimal React and TypeScript interface for chat, citations, confirmations,
   and the admin overview
 - Local CORS configuration for the development frontend
@@ -192,6 +193,8 @@ The milestone is done when:
   installed backend/frontend dependencies, importable application code, and
   writable local runtime storage.
 - `python scripts/dev.py test` passes.
+- `python scripts/dev.py eval` reports the committed deterministic baseline for
+  intent, policy retrieval, order extraction, and ticket confirmation.
 - `python scripts/dev.py verify` passes before a commit or pull request.
 - OpenAPI starts locally with `python scripts/dev.py backend`.
 - Tests cover policy grounding, insufficient context, order ownership and safe
