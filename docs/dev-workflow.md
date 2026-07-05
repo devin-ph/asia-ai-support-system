@@ -72,7 +72,9 @@ git commit -m "chore(verify): add unified verification command"
 
 ## Completion flow
 
-For normal implementation tasks, must finish by committing the intentional changes and pushing the current working branch.
+For small, clear, low-risk tasks, finish by committing the intentional changes
+and pushing the current working branch. For risky, ambiguous, or blocked tasks,
+stop before committing and report the reason.
 
 Before committing, confirm that the current branch is not `main`:
 
@@ -80,7 +82,8 @@ Before committing, confirm that the current branch is not `main`:
 git branch --show-current
 ```
 
-If the output is main, create an appropriate short-lived branch first:
+If the output is `main`, create an appropriate short-lived branch first:
+
 ```bash
 git checkout -b <prefix>/<short-slug>
 ```
@@ -98,22 +101,46 @@ git push -u origin <current-branch>
 
 Rules:
 
-* Commit only intentional tracked changes.
+* Commit only intentional changes.
+* Do not use `git add .` unless the diff has been reviewed and every changed
+  file is intentional.
 * Use a Conventional Commits message.
 * Push the current branch to `origin` when authentication is available.
 * Do not push directly to `main`.
 * Do not merge into `main` unless the user explicitly asks.
-* Do not commit secrets, real PII, generated build artifacts, dependency folders, runtime state, or unrelated local changes.
-* If verification fails, stop and report the failure. Do not commit unless the user explicitly asks for a work-in-progress commit.
-* For docs-only changes, full verification may be replaced with a short manual verification note.
+* Do not commit secrets, real PII, generated build artifacts, dependency
+  folders, runtime state, or unrelated local changes.
+* If verification fails, stop and report the failure. Do not commit unless the
+  user explicitly asks for a work-in-progress commit.
+* For docs-only changes, full verification may be replaced with a short manual
+  verification note.
 
 After finishing, report:
 
-* changed files;
+* changed files and why they changed;
 * verification result;
-* commit hash;
-* pushed branch;
+* commit hash and message, or why no commit was created;
+* pushed branch, or why push was skipped;
 * any remaining manual follow-up.
+
+## Manual review commands
+
+Use these commands to review a branch before merging it into `main`:
+
+```bash
+git status
+git branch --show-current
+git log main..HEAD --oneline
+git diff main...HEAD --name-only
+git diff main...HEAD --stat
+git diff main...HEAD
+```
+
+For reviewing staged changes before committing:
+
+```bash
+git diff --staged
+```
 
 ## Before merging to main
 

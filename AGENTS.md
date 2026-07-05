@@ -90,32 +90,54 @@ For detailed Git commands, see `docs/dev-workflow.md`.
 
 ## Git Behavior
 
-For non-trivial implementation, test, refactor, documentation, or tooling tasks, always complete the Git workflow instead of only suggesting Git commands.
+Use a lightweight controlled workflow: let the agent handle routine Git steps on
+a short-lived branch, but keep `main` protected.
 
-Must:
+For small, clear, low-risk tasks, should finish by committing the
+intentional changes and pushing the current working branch. If the task is
+ambiguous, risky, or blocked, stop before committing and report the reason.
 
-* Check the current branch. If on `main`, create an appropriate short-lived branch first. Never commit directly to `main`.
+Before committing, must:
+
+* Check the current branch. If on `main`, create an appropriate short-lived
+  branch using the standard prefixes above.
 * Inspect the working tree with `git status`.
-* Run `python scripts/dev.py verify` before committing code, test, tooling, or behavior changes.
-* For docs-only changes, full verification may be replaced with a short manual verification note.
-* If verification fails, stop and report the failure immediately. Do not commit unless the user explicitly asks for a work-in-progress commit.
 * Stage only intentional files.
-* Create a Conventional Commit.
-* Push the current working branch to `origin` if authentication and remote access are available.
-* Report results in this format:
+* Run `python scripts/dev.py verify` before committing code, test, tooling, or
+  behavior changes.
+* For docs-only changes, full verification may be replaced with a short manual
+  verification note.
 
-  Branch   : <name>
-  Commit   : <hash> – "<message>"
-  Verify   : PASSED | FAILED
-  Push     : SUCCESS | FAILED
-  Follow-up: <manual steps or blockers if any>
+Stop before committing when:
+
+* Verification fails.
+* The requested scope is ambiguous.
+* Unrelated local changes are present.
+* Files outside the requested scope were touched.
+* Dependency, fixture, schema, security, secret, environment, or data-handling
+  files changed unexpectedly.
+* The agent is not confident that all changed files are intentional.
 
 Must not:
 
+* Only suggest `git add`, `git commit`, or `git push` commands when the safe
+  completion path is available.
 * Commit directly to `main`.
 * Push directly to `main`.
 * Merge into `main` unless the user explicitly asks.
-* Commit secrets, real PII, generated build artifacts, dependency folders, runtime state, or unrelated local changes.
+* Commit secrets, real PII, generated build artifacts, dependency folders,
+  runtime state, or unrelated local changes.
+* Commit after failed verification unless the user explicitly asks for a
+  work-in-progress commit.
+
+After finishing, report:
+
+* branch name;
+* commit hash and message, or why no commit was created;
+* verification result;
+* push result;
+* changed files and why they changed;
+* remaining blockers or manual follow-up.
 
 For the detailed command sequence, see `docs/dev-workflow.md`.
 
