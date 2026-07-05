@@ -5,9 +5,11 @@ from __future__ import annotations
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.intent import IntentLabel, analyze_message
-from app.order_service import lookup_order
-from app.policy_search import search_policy
+from app.intent import IntentLabel
+from app.providers import (
+    ChatProviders,
+    default_chat_providers,
+)
 from app.schemas import (
     ActionConfirmRequest,
     ActionConfirmResponse,
@@ -36,6 +38,10 @@ def _state(request: Request) -> DemoState:
     return request.app.state.demo_state
 
 
+def _chat_providers(request: Request) -> ChatProviders:
+    return request.app.state.chat_providers
+
+
 @router.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     """Return a lightweight liveness response."""
@@ -46,7 +52,8 @@ async def health() -> HealthResponse:
 async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     """Handle one deterministic customer-support message."""
     state = _state(request)
-    analysis = analyze_message(req.message)
+    providers = _chat_providers(request)
+    analysis = providers.analyzer.analyze(req.message)
     intent = analysis.intent
     sentiment = analysis.sentiment
     assistant_message = GENERAL_REPLY
@@ -60,7 +67,7 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
         IntentLabel.WARRANTY,
     }:
         state.record_tool("policy_search")
-        policy_result = search_policy(req.message)
+        policy_result = providers.policy.search(req.message)
         assistant_message = policy_result.answer
         citations = list(policy_result.citations)
         tool_events.append(
@@ -74,7 +81,7 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
             )
         )
     elif intent == IntentLabel.ORDER_LOOKUP:
-        order_result = lookup_order(req.message)
+        order_result = providers.orders.lookup(req.message)
         assistant_message = order_result.answer
         if order_result.lookup_performed:
             state.record_tool("order_lookup")
@@ -154,7 +161,11 @@ async def admin_overview(request: Request) -> AdminOverview:
     return _state(request).overview()
 
 
-def create_app(state: DemoState | None = None) -> FastAPI:
+def create_app(
+    state: DemoState | None = None,
+    *,
+    chat_providers: ChatProviders | None = None,
+) -> FastAPI:
     """Construct an application with fresh injectable in-memory state."""
     application = FastAPI(
         title="A.S.I.A - AI Support for Vietnamese E-Commerce",
@@ -163,6 +174,9 @@ def create_app(state: DemoState | None = None) -> FastAPI:
         redoc_url="/redoc",
     )
     application.state.demo_state = state or DemoState()
+    application.state.chat_providers = (
+        chat_providers or default_chat_providers()
+    )
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[

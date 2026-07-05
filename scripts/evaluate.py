@@ -20,10 +20,9 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app.order_service import extract_order_reference  # noqa: E402
-from app.policy_search import search_policy  # noqa: E402
+from app.providers import default_chat_providers  # noqa: E402
+from app.providers.tickets import LocalTicketProvider  # noqa: E402
 from app.storage import load_tickets  # noqa: E402
-from app.ticket_service import TicketService  # noqa: E402
-from app.intent import detect_intent  # noqa: E402
 
 DATASET_PATHS = {
     "intent": EVAL_DIR / "intent_cases.vi.jsonl",
@@ -98,9 +97,12 @@ def load_jsonl(path: Path) -> tuple[dict[str, Any], ...]:
 
 
 def evaluate_intents(cases: tuple[dict[str, Any], ...]) -> MetricResult:
+    analyzer = default_chat_providers().analyzer
     failures: list[str] = []
     for case in cases:
-        predicted = detect_intent(_required_string(case, "text")).value
+        predicted = analyzer.analyze(
+            _required_string(case, "text")
+        ).intent.value
         expected = _required_string(case, "expected_intent")
         if predicted != expected:
             failures.append(f"{case['id']}: expected={expected}, got={predicted}")
@@ -110,6 +112,7 @@ def evaluate_intents(cases: tuple[dict[str, Any], ...]) -> MetricResult:
 def evaluate_policies(
     cases: tuple[dict[str, Any], ...],
 ) -> tuple[MetricResult, MetricResult]:
+    policy = default_chat_providers().policy
     section_total = 0
     section_hits = 0
     section_failures: list[str] = []
@@ -118,7 +121,7 @@ def evaluate_policies(
     insufficient_failures: list[str] = []
 
     for case in cases:
-        result = search_policy(_required_string(case, "query"))
+        result = policy.search(_required_string(case, "query"))
         is_insufficient = not result.citations
         expects_insufficient = case.get("expected") == "insufficient_context"
 
@@ -183,11 +186,11 @@ def evaluate_order_extraction(
 
 
 def _evaluate_ticket_case(case: dict[str, Any], tickets_path: Path) -> list[str]:
-    service = TicketService(tickets_path)
-    action = service.draft_ticket(_required_string(case, "summary"))
+    provider = LocalTicketProvider(tickets_path)
+    action = provider.draft_ticket(_required_string(case, "summary"))
     failures: list[str] = []
 
-    if action.status.value != "pending" or service.ticket_count != 0:
+    if action.status.value != "pending" or provider.ticket_count != 0:
         failures.append("draft created a ticket or was not pending")
 
     decisions = case.get("decisions")
@@ -208,7 +211,7 @@ def _evaluate_ticket_case(case: dict[str, Any], tickets_path: Path) -> list[str]
         with ThreadPoolExecutor(max_workers=len(decisions) or 1) as executor:
             resolutions = list(
                 executor.map(
-                    lambda decision: service.resolve_action(
+                    lambda decision: provider.resolve_action(
                         target_id,
                         confirm=decision,
                     ),
@@ -217,7 +220,7 @@ def _evaluate_ticket_case(case: dict[str, Any], tickets_path: Path) -> list[str]
             )
     elif mode in {"sequential", "unknown_action"}:
         resolutions = [
-            service.resolve_action(target_id, confirm=decision)
+            provider.resolve_action(target_id, confirm=decision)
             for decision in decisions
         ]
     else:
@@ -248,10 +251,13 @@ def _evaluate_ticket_case(case: dict[str, Any], tickets_path: Path) -> list[str]
 
     expected_count = case.get("expected_ticket_count")
     persisted_count = len(load_tickets(tickets_path))
-    if service.ticket_count != expected_count or persisted_count != expected_count:
+    if (
+        provider.ticket_count != expected_count
+        or persisted_count != expected_count
+    ):
         failures.append(
             f"ticket count expected={expected_count!r}, "
-            f"memory={service.ticket_count}, persisted={persisted_count}"
+            f"memory={provider.ticket_count}, persisted={persisted_count}"
         )
 
     if case.get("expect_same_ticket_id"):

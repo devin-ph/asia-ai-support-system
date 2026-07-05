@@ -15,6 +15,8 @@ The backend implements the deterministic API contract for the
 - `app/intent.py`: deterministic Vietnamese intent and sentiment analysis.
 - `app/order_service.py`: fixed-customer lookup and safe order response shaping.
 - `app/policy_search.py`: keyword search over allowlisted Markdown sections.
+- `app/providers/`: narrow analyzer, policy, order, and ticket contracts plus
+  deterministic adapters.
 - `app/state.py`: in-memory actions and counters plus ticket orchestration.
 - `app/storage.py`: validated JSON loading and atomic ticket writes.
 - `app/ticket_service.py`: pending actions and idempotent ticket confirmation.
@@ -42,6 +44,8 @@ Keep route handlers thin. Business rules belong in dedicated services or
 - Policy citations contain the Markdown title, repository-relative source, and
   exact H2 section.
 - Chat may call `draft_ticket` but must never execute or persist a ticket.
+- The chat route may access only `ChatProviders`; that bundle contains no
+  ticket write capability.
 - Ticket creation is allowed only through the confirmation endpoint.
 - Repeated confirmation of one action must return the original result.
 - Admin responses contain aggregate counters only.
@@ -87,6 +91,8 @@ for:
 - ticket draft, persistence, confirmation, cancellation, and repeated
   confirmation;
 - admin message, intent, sentiment, ticket, and tool counters.
+- deterministic and fake implementations passing the same provider contracts;
+- provider replacement preserving the public chat response envelope.
 
 Run:
 

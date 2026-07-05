@@ -154,6 +154,8 @@ Included:
 - `var/demo_tickets.json` as the ignored confirmed-ticket runtime store
 - Keyword search over allowlisted sections in `docs/policies/*.md`
 - Deterministic intent and sentiment classification
+- Narrow provider contracts for analyzer, policy, orders, and guarded tickets
+- Deterministic adapters as the default provider implementations
 - Repository-owned synthetic policy documents and order fixtures
 - Automated backend/API tests and frontend component tests
 - Versioned synthetic evaluation cases and deterministic baseline metrics
@@ -183,6 +185,7 @@ Explicitly excluded:
 7. Tests write tickets only to temporary files, never to the repository fixture.
 8. Runtime ticket writes never mutate files under `data/fixtures/`.
 9. Secrets and credentials are never committed.
+10. The chat route has no direct access to a ticket write provider.
 
 ## Definition of Done
 
@@ -200,6 +203,8 @@ The milestone is done when:
 - Tests cover policy grounding, insufficient context, order ownership and safe
   fields, ticket persistence, confirmation idempotency, cancellation, and admin
   counters.
+- Shared provider contract tests pass for deterministic and fake
+  implementations without changing the route response contract.
 - Frontend tests cover chat rendering, citations, safe order summaries,
   confirmation/cancellation, admin refresh, and API error states.
 - README instructions and response examples match the implemented API.
