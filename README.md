@@ -68,7 +68,8 @@ API:
 ### Prerequisites
 
 - Python 3.10 or newer
-- Node.js `^20.19.0` or `>=22.12.0`
+- Node.js 22 LTS (recommended; selected by `.nvmrc`)
+- Node.js `^20.19.0` remains supported for compatibility
 - npm
 
 Create and activate a virtual environment:
@@ -88,6 +89,15 @@ macOS or Linux:
 ```bash
 source .venv/bin/activate
 ```
+
+If your Node version manager supports `.nvmrc`, select the repository default:
+
+```bash
+nvm use
+```
+
+The frontend enables npm's strict engine check, so unsupported Node majors fail
+during installation instead of continuing with a warning.
 
 Install dependencies from the repository root:
 
@@ -175,9 +185,11 @@ Before committing or opening a pull request, run the full-project verification:
 python scripts/dev.py verify
 ```
 
-GitHub Actions repeats `doctor` and `verify` from a clean checkout on Python
-3.10 and 3.12 with Node.js 22. Local verification remains the fastest feedback
-loop; CI is the independent reproducibility check for pull requests and `main`.
+GitHub Actions repeats `doctor` and `verify` from a clean checkout using two
+representative supported pairs: Python 3.10 with Node.js 20, and Python 3.12
+with the default Node.js 22 LTS. Local verification remains the fastest
+feedback loop; CI is the independent reproducibility check for pull requests
+and `main`.
 
 To inspect the product-level deterministic baseline separately:
 

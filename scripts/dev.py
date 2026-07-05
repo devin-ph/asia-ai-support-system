@@ -35,6 +35,7 @@ BACKEND_REQUIREMENTS_LOCK = BACKEND_DIR / "requirements.txt"
 FRONTEND_PKG = FRONTEND_DIR / "package.json"
 FRONTEND_LOCK = FRONTEND_DIR / "package-lock.json"
 FRONTEND_NODE_MODULES = FRONTEND_DIR / "node_modules"
+NODE_VERSION_FILE = ROOT / ".nvmrc"
 EVALUATION_SCRIPT = ROOT / "scripts" / "evaluate.py"
 EVALUATION_BASELINE = ROOT / "eval" / "baseline.v0.1.json"
 RUNTIME_DIR = ROOT / "var"
@@ -43,7 +44,8 @@ RUNTIME_TICKETS = RUNTIME_DIR / "demo_tickets.json"
 ENV_FILE = ROOT / ".env"
 ENV_EXAMPLE = ROOT / ".env.example"
 
-SUPPORTED_NODE_RANGE = "^20.19.0 || >=22.12.0"
+SUPPORTED_NODE_RANGE = "^20.19.0 || ^22.12.0"
+DEFAULT_NODE_MAJOR = 22
 REQUIRED_FRONTEND_SCRIPTS = ("test", "typecheck", "build")
 
 _OBVIOUS_SECRET_RE = re.compile(
@@ -124,7 +126,29 @@ def _node_version_supported(version: str) -> bool:
     major, minor, patch = parsed
     if major == 20:
         return (major, minor, patch) >= (20, 19, 0)
-    return (major, minor, patch) >= (22, 12, 0)
+    if major == 22:
+        return (major, minor, patch) >= (22, 12, 0)
+    return False
+
+
+def _check_default_node_version() -> bool:
+    """Ensure the repository-owned default selects the supported Node LTS."""
+    try:
+        configured = NODE_VERSION_FILE.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        print(f"  {_red(_FAIL)} Could not read .nvmrc: {exc}")
+        return False
+
+    expected = str(DEFAULT_NODE_MAJOR)
+    if configured != expected:
+        print(
+            f"  {_red(_FAIL)} .nvmrc selects Node {configured or 'nothing'} "
+            f"(expected {expected})"
+        )
+        return False
+
+    print(f"  {_green(_OK)} .nvmrc selects Node {expected} LTS by default")
+    return True
 
 
 def _check_node() -> bool:
@@ -498,6 +522,7 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
     print(_bold("[Runtime]"))
     results.append(_check_python())
     results.append(_check_node())
+    results.append(_check_default_node_version())
     results.append(_check_command("npm"))
 
     print(f"\n{_bold('[Backend]')}")

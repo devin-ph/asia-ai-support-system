@@ -216,7 +216,8 @@ automated verification:
 - `.env.example` is the repository-owned environment contract, even while the
   demo requires no environment variables.
 - GitHub Actions installs from the committed Python and npm locks, then runs
-  `doctor` and `verify` on every pull request and push to `main`.
+  `doctor` and `verify` on representative Node.js 20/Python 3.10 and Node.js
+  22/Python 3.12 pairs for every pull request and push to `main`.
 - `doctor` validates supported runtimes, exact locked backend dependencies,
   frontend dependencies, application importability, environment configuration,
   and writable local runtime storage.

@@ -58,7 +58,9 @@ add frontend-only fields to API types.
 - React and ReactDOM are the only runtime dependencies.
 - Frontend test tooling is limited to Vitest, React Testing Library, jsdom, and
   MSW for this milestone.
-- Node.js must satisfy `^20.19.0 || >=22.12.0` for Vite 7.
+- Node.js 22 LTS is the repository default selected by `../.nvmrc`.
+- Node.js must satisfy `^20.19.0 || ^22.12.0`; odd and future major versions
+  are intentionally unsupported until they are reviewed and added explicitly.
 - Install the locked dependency graph with `npm ci`.
 - Do not add Redux, Zustand, TanStack Query, Tailwind, or any UI component
   library in this milestone.
