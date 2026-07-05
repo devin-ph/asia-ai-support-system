@@ -107,8 +107,13 @@ export function ChatPanel({ onActivity }: ChatPanelProps) {
 
       <form className="chat-form" onSubmit={(event) => void submit(event)}>
         <label htmlFor="chat-message">Tin nhắn</label>
+        <p className="synthetic-data-notice" id="synthetic-data-notice">
+          Demo chỉ sử dụng dữ liệu giả lập. Không nhập thông tin cá nhân hoặc
+          dữ liệu khách hàng thật.
+        </p>
         <div>
           <textarea
+            aria-describedby="synthetic-data-notice"
             id="chat-message"
             maxLength={2000}
             onChange={(event) => setMessage(event.target.value)}
