@@ -142,8 +142,7 @@ def _check_default_node_version() -> bool:
     expected = str(DEFAULT_NODE_MAJOR)
     if configured != expected:
         print(
-            f"  {_red(_FAIL)} .nvmrc selects Node {configured or 'nothing'} "
-            f"(expected {expected})"
+            f"  {_red(_FAIL)} .nvmrc selects Node {configured or 'nothing'} (expected {expected})"
         )
         return False
 
@@ -179,10 +178,7 @@ def _check_node() -> bool:
         return True
 
     shown_version = version.removeprefix("v") or "unknown"
-    print(
-        f"  {_red(_FAIL)} Node.js {shown_version} is unsupported "
-        f"(need {SUPPORTED_NODE_RANGE})"
-    )
+    print(f"  {_red(_FAIL)} Node.js {shown_version} is unsupported (need {SUPPORTED_NODE_RANGE})")
     return False
 
 
@@ -254,10 +250,7 @@ def _load_requirement_pins(path: Path) -> dict[str, str]:
         pins[normalized_name] = version
 
     if invalid:
-        raise ValueError(
-            "requirements.txt contains non-pinned entries: "
-            + "; ".join(invalid)
-        )
+        raise ValueError("requirements.txt contains non-pinned entries: " + "; ".join(invalid))
     if not pins:
         raise ValueError("requirements.txt contains no package pins")
     return pins
@@ -279,9 +272,7 @@ def _check_backend_dependency_lock() -> bool:
             mismatches.append(f"{name} is missing")
             continue
         if installed != expected:
-            mismatches.append(
-                f"{name}=={installed} installed, expected {expected}"
-            )
+            mismatches.append(f"{name}=={installed} installed, expected {expected}")
 
     if mismatches:
         print(f"  {_red(_FAIL)} Installed backend dependencies do not match lock")
@@ -290,10 +281,7 @@ def _check_backend_dependency_lock() -> bool:
         print("    Run: python -m pip install -r backend/requirements.txt")
         return False
 
-    print(
-        f"  {_green(_OK)} Backend dependency lock matches "
-        f"{len(pins)} installed packages"
-    )
+    print(f"  {_green(_OK)} Backend dependency lock matches {len(pins)} installed packages")
     return True
 
 
@@ -372,19 +360,13 @@ def _check_frontend_scripts() -> bool:
         if not isinstance(scripts.get(name), str) or not scripts[name].strip()
     ]
     if missing:
-        print(
-            f"  {_red(_FAIL)} Missing frontend scripts: "
-            f"{', '.join(missing)}"
-        )
+        print(f"  {_red(_FAIL)} Missing frontend scripts: {', '.join(missing)}")
         return False
 
     engines = manifest.get("engines")
     node_range = engines.get("node") if isinstance(engines, dict) else None
     if node_range != SUPPORTED_NODE_RANGE:
-        print(
-            f"  {_red(_FAIL)} frontend/package.json must declare Node "
-            f"{SUPPORTED_NODE_RANGE}"
-        )
+        print(f"  {_red(_FAIL)} frontend/package.json must declare Node {SUPPORTED_NODE_RANGE}")
         return False
 
     print(
@@ -463,10 +445,7 @@ def _check_env_configuration() -> bool:
 
     expected_keys = set(expected_values)
     if not expected_keys:
-        print(
-            f"  {_green(_OK)} .env.example declares no required "
-            "environment variables"
-        )
+        print(f"  {_green(_OK)} .env.example declares no required environment variables")
         return True
 
     if not ENV_FILE.exists():
@@ -480,13 +459,9 @@ def _check_env_configuration() -> bool:
         print(f"  {_red(_FAIL)} Could not read .env: {exc}")
         return False
 
-    missing_keys = sorted(
-        key for key in expected_keys if not actual_values.get(key)
-    )
+    missing_keys = sorted(key for key in expected_keys if not actual_values.get(key))
     if missing_keys:
-        print(
-            f"  {_red(_FAIL)} .env is missing: {', '.join(missing_keys)}"
-        )
+        print(f"  {_red(_FAIL)} .env is missing: {', '.join(missing_keys)}")
         return False
 
     print(f"  {_green(_OK)} .env satisfies the declared environment contract")
@@ -555,12 +530,8 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
     results.append(_check_backend_import())
 
     print(f"\n{_bold('[Frontend]')}")
-    results.append(
-        _check_path("frontend package.json", FRONTEND_PKG, required=True)
-    )
-    results.append(
-        _check_path("frontend package-lock.json", FRONTEND_LOCK, required=True)
-    )
+    results.append(_check_path("frontend package.json", FRONTEND_PKG, required=True))
+    results.append(_check_path("frontend package-lock.json", FRONTEND_LOCK, required=True))
     results.append(_check_frontend_scripts())
     results.append(_check_frontend_dependencies())
 
@@ -576,12 +547,7 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
         print(_green("\nEnvironment is ready to run the full project."))
         return 0
 
-    print(
-        _yellow(
-            "\nEnvironment is not ready yet. "
-            "Follow the remediation hints above."
-        )
-    )
+    print(_yellow("\nEnvironment is not ready yet. Follow the remediation hints above."))
     return 1
 
 
@@ -794,10 +760,7 @@ def _check_runtime_hygiene() -> bool:
         changed_fixtures = ", ".join(
             line[3:] for line in fixture_status.stdout.splitlines() if line
         )
-        errors.append(
-            "Immutable files under data/fixtures/ were changed: "
-            f"{changed_fixtures}"
-        )
+        errors.append(f"Immutable files under data/fixtures/ were changed: {changed_fixtures}")
 
     try:
         seed = json.loads(TICKET_SEED.read_text(encoding="utf-8"))
@@ -805,20 +768,14 @@ def _check_runtime_hygiene() -> bool:
         errors.append(f"Ticket seed cannot be read as JSON: {exc}")
     else:
         if seed != []:
-            errors.append(
-                "data/fixtures/demo_tickets.seed.json must remain an empty list."
-            )
+            errors.append("data/fixtures/demo_tickets.seed.json must remain an empty list.")
 
     if errors:
         for error in errors:
             print(_red(f"  {_FAIL} {error}"))
         return False
 
-    print(
-        _green(
-            f"  {_OK} Runtime state is ignored; immutable fixtures are clean."
-        )
-    )
+    print(_green(f"  {_OK} Runtime state is ignored; immutable fixtures are clean."))
     return True
 
 
@@ -863,16 +820,11 @@ def _check_obvious_secrets() -> bool:
 
         for line_number, line in enumerate(lines, start=1):
             if _OBVIOUS_SECRET_RE.search(line):
-                findings.append(
-                    f"{path.relative_to(ROOT).as_posix()}:{line_number}"
-                )
+                findings.append(f"{path.relative_to(ROOT).as_posix()}:{line_number}")
 
     if findings:
         print(
-            _red(
-                f"  {_FAIL} Possible credential assignments found "
-                "(values intentionally hidden):"
-            )
+            _red(f"  {_FAIL} Possible credential assignments found (values intentionally hidden):")
         )
         for finding in findings:
             print(f"    - {finding}")
@@ -907,11 +859,7 @@ def _check_git_whitespace() -> bool:
                 print(result.stderr.rstrip())
 
     if passed:
-        print(
-            _green(
-                f"  {_OK} No whitespace errors in staged or unstaged diffs."
-            )
-        )
+        print(_green(f"  {_OK} No whitespace errors in staged or unstaged diffs."))
     return passed
 
 
@@ -955,14 +903,8 @@ def _inspect_working_tree() -> tuple[bool, bool]:
     if untracked:
         details.append(f"{untracked} untracked file(s)")
     if ignored_warnings:
-        details.append(
-            f"{len(ignored_warnings)} ignored local artifact(s) requiring review"
-        )
-    print(
-        _yellow(
-            f"  {_WARN} Working tree is not clean: {', '.join(details)}."
-        )
-    )
+        details.append(f"{len(ignored_warnings)} ignored local artifact(s) requiring review")
+    print(_yellow(f"  {_WARN} Working tree is not clean: {', '.join(details)}."))
     for entry in entries:
         print(f"    {entry}")
     for entry in ignored_warnings:
@@ -974,11 +916,7 @@ def _ignored_artifact_requires_review(path: str) -> bool:
     """Flag ignored local files that deserve an explicit pre-PR warning."""
     normalized = path.strip('"').replace("\\", "/").casefold()
     name = normalized.rsplit("/", maxsplit=1)[-1]
-    return (
-        name == ".env"
-        or name.startswith(".env.")
-        or name.endswith(".log")
-    )
+    return name == ".env" or name.startswith(".env.") or name.endswith(".log")
 
 
 def _report_verification_summary(
@@ -996,10 +934,7 @@ def _report_verification_summary(
     if working_tree_clean:
         print(f"  {_green(_OK)} Working tree clean")
     else:
-        print(
-            f"  {_yellow(_WARN)} Working tree changes or local artifact "
-            "warnings require review"
-        )
+        print(f"  {_yellow(_WARN)} Working tree changes or local artifact warnings require review")
     print(f"\n{passed}/{total} verification steps passed.")
 
     if passed != total:
@@ -1015,18 +950,44 @@ def _report_verification_summary(
         )
         return 0
 
-    print(
-        _green(
-            "\nVerification passed. Working tree clean. Ready for PR/tag."
-        )
-    )
+    print(_green("\nVerification passed. Working tree clean. Ready for PR/tag."))
     return 0
+
+
+def _python_quality_commands() -> tuple[tuple[str, list[str]], ...]:
+    """Return the repository-wide Python lint and format gates."""
+    return (
+        (
+            "Python lint",
+            [sys.executable, "-m", "ruff", "check", "backend", "scripts"],
+        ),
+        (
+            "Python format",
+            [
+                sys.executable,
+                "-m",
+                "ruff",
+                "format",
+                "--check",
+                "backend",
+                "scripts",
+            ],
+        ),
+    )
 
 
 def cmd_verify(_args: argparse.Namespace) -> int:
     """Run the complete pre-commit and pre-PR verification suite."""
     print(_bold("Running full project verification..."))
     results: list[tuple[str, bool]] = []
+
+    for label, command in _python_quality_commands():
+        results.append(
+            (
+                label,
+                _run_verification_command(label, command, cwd=ROOT),
+            )
+        )
 
     results.append(
         (
