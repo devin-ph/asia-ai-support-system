@@ -428,15 +428,66 @@ def _check_runtime_writable() -> bool:
 def _check_env_configuration() -> bool:
     """Check the optional dotenv contract for the current milestone."""
     if not ENV_EXAMPLE.exists():
-        print(f"  {_green(_OK)} No .env configuration required for v0.1")
-        return True
-    if ENV_FILE.exists():
-        print(f"  {_green(_OK)} .env exists for the declared environment")
+        print(f"  {_red(_FAIL)} .env.example is missing")
+        return False
+
+    try:
+        expected_values = _load_env_values(ENV_EXAMPLE)
+    except (OSError, ValueError) as exc:
+        print(f"  {_red(_FAIL)} Could not read .env.example: {exc}")
+        return False
+
+    expected_keys = set(expected_values)
+    if not expected_keys:
+        print(
+            f"  {_green(_OK)} .env.example declares no required "
+            "environment variables"
+        )
         return True
 
-    print(f"  {_red(_FAIL)} .env.example exists but .env is missing")
-    print("    Copy .env.example to .env and fill the required local values.")
-    return False
+    if not ENV_FILE.exists():
+        print(f"  {_red(_FAIL)} .env is missing required local values")
+        print("    Copy .env.example to .env and fill the required local values.")
+        return False
+
+    try:
+        actual_values = _load_env_values(ENV_FILE)
+    except (OSError, ValueError) as exc:
+        print(f"  {_red(_FAIL)} Could not read .env: {exc}")
+        return False
+
+    missing_keys = sorted(
+        key for key in expected_keys if not actual_values.get(key)
+    )
+    if missing_keys:
+        print(
+            f"  {_red(_FAIL)} .env is missing: {', '.join(missing_keys)}"
+        )
+        return False
+
+    print(f"  {_green(_OK)} .env satisfies the declared environment contract")
+    return True
+
+
+def _load_env_values(path: Path) -> dict[str, str]:
+    """Return simple NAME=value dotenv entries without exposing values."""
+    values: dict[str, str] = {}
+    for line_number, raw_line in enumerate(
+        path.read_text(encoding="utf-8").splitlines(),
+        start=1,
+    ):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = re.fullmatch(
+            r"([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)",
+            line,
+        )
+        if match is None:
+            raise ValueError(f"invalid entry on line {line_number}")
+        name, value = match.groups()
+        values[name] = value.strip()
+    return values
 
 
 def cmd_doctor(_args: argparse.Namespace) -> int:
@@ -671,7 +722,7 @@ def _run_verification_command(
 
 
 def _check_runtime_hygiene() -> bool:
-    """Ensure runtime state is ignored and the committed seed stays empty."""
+    """Ensure runtime state is ignored and fixtures remain immutable."""
     print(f"\n{_bold('[Runtime hygiene]')}")
     errors: list[str] = []
 
@@ -699,6 +750,30 @@ def _check_runtime_hygiene() -> bool:
     if ignored.returncode != 0:
         errors.append("var/demo_tickets.json is not ignored by Git.")
 
+    fixture_status = subprocess.run(
+        [
+            "git",
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+            "--",
+            "data/fixtures",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if fixture_status.returncode != 0:
+        errors.append("Could not inspect immutable fixture changes.")
+    elif fixture_status.stdout.strip():
+        changed_fixtures = ", ".join(
+            line[3:] for line in fixture_status.stdout.splitlines() if line
+        )
+        errors.append(
+            "Immutable files under data/fixtures/ were changed: "
+            f"{changed_fixtures}"
+        )
+
     try:
         seed = json.loads(TICKET_SEED.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -714,7 +789,11 @@ def _check_runtime_hygiene() -> bool:
             print(_red(f"  {_FAIL} {error}"))
         return False
 
-    print(_green(f"  {_OK} Runtime state is ignored; ticket seed is clean."))
+    print(
+        _green(
+            f"  {_OK} Runtime state is ignored; immutable fixtures are clean."
+        )
+    )
     return True
 
 

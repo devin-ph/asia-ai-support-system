@@ -133,6 +133,85 @@ def test_runtime_directory_must_be_writable(
     assert tuple(runtime_dir.iterdir()) == ()
 
 
+def test_empty_env_example_declares_no_required_configuration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env_example = tmp_path / ".env.example"
+    env_example.write_text("# No required values.\n", encoding="utf-8")
+    monkeypatch.setattr(DEV, "ENV_EXAMPLE", env_example)
+    monkeypatch.setattr(DEV, "ENV_FILE", tmp_path / ".env")
+
+    assert DEV._check_env_configuration() is True
+
+
+def test_env_contract_requires_all_declared_keys(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env_example = tmp_path / ".env.example"
+    env_file = tmp_path / ".env"
+    env_example.write_text(
+        "PROVIDER_URL=\nPROVIDER_TOKEN=\n",
+        encoding="utf-8",
+    )
+    env_file.write_text("PROVIDER_URL=http://localhost\n", encoding="utf-8")
+    monkeypatch.setattr(DEV, "ENV_EXAMPLE", env_example)
+    monkeypatch.setattr(DEV, "ENV_FILE", env_file)
+
+    assert DEV._check_env_configuration() is False
+
+    env_file.write_text(
+        "PROVIDER_URL=http://localhost\nPROVIDER_TOKEN=local-demo\n",
+        encoding="utf-8",
+    )
+    assert DEV._check_env_configuration() is True
+
+
+def test_env_contract_rejects_empty_required_values(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env_example = tmp_path / ".env.example"
+    env_file = tmp_path / ".env"
+    env_example.write_text("PROVIDER_TOKEN=\n", encoding="utf-8")
+    env_file.write_text("PROVIDER_TOKEN=\n", encoding="utf-8")
+    monkeypatch.setattr(DEV, "ENV_EXAMPLE", env_example)
+    monkeypatch.setattr(DEV, "ENV_FILE", env_file)
+
+    assert DEV._check_env_configuration() is False
+
+
+def test_runtime_hygiene_rejects_fixture_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed_path = tmp_path / "demo_tickets.seed.json"
+    seed_path.write_text("[]\n", encoding="utf-8")
+    monkeypatch.setattr(DEV, "TICKET_SEED", seed_path)
+
+    def git_result(
+        command: list[str],
+        **_kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        if command[1] == "ls-files":
+            return subprocess.CompletedProcess(command, 0, "", "")
+        if command[1] == "check-ignore":
+            return subprocess.CompletedProcess(command, 0, "", "")
+        if command[1] == "status":
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                " M data/fixtures/demo_orders.json\n",
+                "",
+            )
+        raise AssertionError(f"Unexpected command: {command}")
+
+    monkeypatch.setattr(DEV.subprocess, "run", git_result)
+
+    assert DEV._check_runtime_hygiene() is False
+
+
 def test_requirement_lock_accepts_only_exact_pins(tmp_path: Path) -> None:
     lock_path = tmp_path / "requirements.txt"
     lock_path.write_text(

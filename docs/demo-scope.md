@@ -1,6 +1,9 @@
-# A.S.I.A v0.1 Demo Scope
+# A.S.I.A Demo Scope
 
 ## Milestone
+
+Current scope: v0.1.1
+Base product flows: v0.1
 
 **v0.1: Runnable Vertical Slice**
 
@@ -144,27 +147,20 @@ These labels are part of the API and admin counter contract.
 
 ## Technical Boundaries
 
-Included:
-
-- FastAPI and Pydantic
-- In-memory message, action, and counter state that resets on restart
-- Validated local JSON fixtures and runtime ticket storage
-- `data/fixtures/demo_orders.json` as the read-only order fixture
-- `data/fixtures/demo_tickets.seed.json` as the immutable empty ticket seed
-- `var/demo_tickets.json` as the ignored confirmed-ticket runtime store
-- Keyword search over allowlisted sections in `docs/policies/*.md`
+Included in v0.1:
 - Deterministic intent and sentiment classification
-- Narrow provider contracts for analyzer, policy, orders, and guarded tickets
-- Deterministic adapters as the default provider implementations
-- Repository-owned synthetic policy documents and order fixtures
-- Automated backend/API tests and frontend component tests
-- Versioned synthetic evaluation cases and deterministic baseline metrics
-- Minimal React and TypeScript interface for chat, citations, confirmations,
-  and the admin overview
-- Local CORS configuration for the development frontend
+- Keyword search over allowlisted policy sections
+- Local JSON fixtures and runtime ticket storage
+- Minimal React and TypeScript interface
+- Backend/API tests
+
+Added in v0.1.1:
+- Provider contracts
+- Eval baseline
+- Frontend component tests
+- GitHub Actions verify
 
 Explicitly excluded:
-
 - OpenAI or any other hosted model
 - LangGraph, Qdrant, embeddings, or retrieval infrastructure
 - Authentication and production authorization
@@ -208,3 +204,36 @@ The milestone is done when:
 - Frontend tests cover chat rendering, citations, safe order summaries,
   confirmation/cancellation, admin refresh, and API error states.
 - README instructions and response examples match the implemented API.
+
+## v0.1.1: Reproducibility Hardening
+
+The v0.1.1 maintenance scope does not change the four product flows. It makes
+the existing demo reproducible from a clean clone and aligns local and
+automated verification:
+
+- Backend direct dependencies live in `backend/requirements.in`; the generated
+  `backend/requirements.txt` pins the complete install set.
+- `.env.example` is the repository-owned environment contract, even while the
+  demo requires no environment variables.
+- GitHub Actions installs from the committed Python and npm locks, then runs
+  `doctor` and `verify` on every pull request and push to `main`.
+- `doctor` validates supported runtimes, exact locked backend dependencies,
+  frontend dependencies, application importability, environment configuration,
+  and writable local runtime storage.
+- Runtime state remains ignored under `var/`; any mutation under the immutable
+  `data/fixtures/` directory fails verification.
+- A successful verification may report PR/tag readiness only when the working
+  tree is clean.
+
+## Status
+
+| Capability | Status |
+| --- | --- |
+| Local demo | Included |
+| Synthetic data | Included |
+| Backend/API tests | Included |
+| Frontend tests | v0.1.1 |
+| Eval baseline | v0.1.1 |
+| Real LLM | Excluded |
+| Real database | Excluded |
+| Production deployment | Excluded |
