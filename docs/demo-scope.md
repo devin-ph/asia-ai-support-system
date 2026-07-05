@@ -155,7 +155,7 @@ Included:
 - Keyword search over allowlisted sections in `docs/policies/*.md`
 - Deterministic intent and sentiment classification
 - Repository-owned synthetic policy documents and order fixtures
-- Automated API tests
+- Automated backend/API tests and frontend component tests
 - Minimal React and TypeScript interface for chat, citations, confirmations,
   and the admin overview
 - Local CORS configuration for the development frontend
@@ -197,4 +197,6 @@ The milestone is done when:
 - Tests cover policy grounding, insufficient context, order ownership and safe
   fields, ticket persistence, confirmation idempotency, cancellation, and admin
   counters.
+- Frontend tests cover chat rendering, citations, safe order summaries,
+  confirmation/cancellation, admin refresh, and API error states.
 - README instructions and response examples match the implemented API.
