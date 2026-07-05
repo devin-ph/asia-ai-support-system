@@ -14,9 +14,7 @@ FIXED_DEMO_CUSTOMER_ID = "demo-customer-001"
 ORDER_REFERENCE_REQUIRED_MESSAGE = (
     "Bạn vui lòng cung cấp mã đơn hàng theo định dạng ASIA-1001 để mình tra cứu."
 )
-ORDER_ACCESS_DENIED_MESSAGE = (
-    "Không tìm thấy đơn hàng thuộc tài khoản demo với mã đã cung cấp."
-)
+ORDER_ACCESS_DENIED_MESSAGE = "Không tìm thấy đơn hàng thuộc tài khoản demo với mã đã cung cấp."
 
 _ORDER_REFERENCE_PATTERN = re.compile(
     r"(?<![A-Z0-9])ASIA[-\s]?\d{4}(?![A-Z0-9])",
@@ -93,4 +91,3 @@ def lookup_order(
         order=safe_order,
         lookup_performed=True,
     )
-

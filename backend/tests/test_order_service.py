@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.order_service import (
     ORDER_ACCESS_DENIED_MESSAGE,
     ORDER_REFERENCE_REQUIRED_MESSAGE,
@@ -56,4 +55,3 @@ def test_lookup_without_reference_does_not_access_an_order() -> None:
     assert result.answer == ORDER_REFERENCE_REQUIRED_MESSAGE
     assert result.order is None
     assert result.lookup_performed is False
-

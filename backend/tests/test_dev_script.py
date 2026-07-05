@@ -91,7 +91,7 @@ def test_frontend_scripts_are_required(
                     "test": "vitest run",
                     "typecheck": "tsc -b",
                     "build": "tsc -b && vite build",
-                }
+                },
             }
         ),
         encoding="utf-8",
@@ -276,6 +276,34 @@ def test_pip_consistency_uses_active_interpreter(
     assert DEV._check_pip_consistency() is True
 
 
+def test_python_quality_gates_use_active_interpreter() -> None:
+    assert DEV._python_quality_commands() == (
+        (
+            "Python lint",
+            [
+                DEV.sys.executable,
+                "-m",
+                "ruff",
+                "check",
+                "backend",
+                "scripts",
+            ],
+        ),
+        (
+            "Python format",
+            [
+                DEV.sys.executable,
+                "-m",
+                "ruff",
+                "format",
+                "--check",
+                "backend",
+                "scripts",
+            ],
+        ),
+    )
+
+
 def test_git_whitespace_check_is_separate_from_working_tree_status(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -381,14 +409,10 @@ def test_dirty_verification_passes_without_claiming_readiness(
 
     assert exit_code == 0
     output = capsys.readouterr().out
-    assert (
-        "Verification passed, but working tree review is required."
-        in output
-    )
+    assert "Verification passed, but working tree review is required." in output
     assert (
         "Commit/stash/discard uncommitted changes and review local artifacts "
-        "before tagging or opening a PR."
-        in output
+        "before tagging or opening a PR." in output
     )
     assert "Ready for PR/tag" not in output
 

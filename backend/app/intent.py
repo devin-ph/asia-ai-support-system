@@ -117,11 +117,7 @@ def normalize_vietnamese(text: str) -> str:
     """Normalize Vietnamese text for accent-insensitive matching."""
     lowered = text.casefold().replace("đ", "d")
     decomposed = unicodedata.normalize("NFD", lowered)
-    return "".join(
-        character
-        for character in decomposed
-        if unicodedata.category(character) != "Mn"
-    )
+    return "".join(character for character in decomposed if unicodedata.category(character) != "Mn")
 
 
 def _contains_keyword(text: str, keyword: str) -> bool:
@@ -165,4 +161,3 @@ def analyze_message(text: str) -> IntentAnalysis:
         intent=detect_intent(text),
         sentiment=detect_sentiment(text),
     )
-

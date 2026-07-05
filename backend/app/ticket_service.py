@@ -42,14 +42,8 @@ class TicketService:
         self._lock = RLock()
         self._tickets_path = tickets_path
         self._pending_actions: dict[str, _PendingActionRecord] = {}
-        initial_store = (
-            tickets_path
-            if tickets_path.exists()
-            else DEMO_TICKETS_SEED_PATH
-        )
-        self._tickets = {
-            ticket.ticket_id: ticket for ticket in load_tickets(initial_store)
-        }
+        initial_store = tickets_path if tickets_path.exists() else DEMO_TICKETS_SEED_PATH
+        self._tickets = {ticket.ticket_id: ticket for ticket in load_tickets(initial_store)}
 
     @property
     def ticket_count(self) -> int:

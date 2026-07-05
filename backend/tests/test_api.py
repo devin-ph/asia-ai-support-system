@@ -7,11 +7,10 @@ from pathlib import Path
 
 import httpx
 import pytest
-from fastapi import FastAPI
-
 from app.main import create_app
 from app.state import DemoState
 from app.storage import load_orders, load_tickets
+from fastapi import FastAPI
 
 
 def assert_stable_chat_shape(body: dict[str, object]) -> None:
@@ -82,13 +81,10 @@ async def test_chat_rejects_removed_session_id(
 
     assert response.status_code == 422
     assert any(
-        error["type"] == "extra_forbidden"
-        and error["loc"] == ["body", "session_id"]
+        error["type"] == "extra_forbidden" and error["loc"] == ["body", "session_id"]
         for error in response.json()["detail"]
     )
-    chat_request_schema = openapi.json()["components"]["schemas"][
-        "ChatRequest"
-    ]
+    chat_request_schema = openapi.json()["components"]["schemas"]["ChatRequest"]
     assert set(chat_request_schema["properties"]) == {"message"}
 
 
@@ -206,10 +202,7 @@ async def test_non_owned_and_unknown_orders_are_indistinguishable(
             "order": None,
         }
     ]
-    assert (
-        non_owned.json()["assistant_message"]
-        == unknown.json()["assistant_message"]
-    )
+    assert non_owned.json()["assistant_message"] == unknown.json()["assistant_message"]
     assert "demo-customer-999" not in non_owned.text
 
 
@@ -365,10 +358,7 @@ async def test_cors_allows_only_local_frontend(
     )
 
     assert allowed.status_code == 200
-    assert (
-        allowed.headers["access-control-allow-origin"]
-        == "http://localhost:5173"
-    )
+    assert allowed.headers["access-control-allow-origin"] == "http://localhost:5173"
     assert "access-control-allow-origin" not in denied.headers
 
 

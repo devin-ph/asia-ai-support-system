@@ -40,9 +40,7 @@ def test_all_evaluation_datasets_are_non_empty_with_unique_ids() -> None:
 
 def test_current_results_match_committed_v01_baseline() -> None:
     actual = EVALUATION.build_snapshot(EVALUATION.run_evaluation())
-    expected = json.loads(
-        EVALUATION.DEFAULT_BASELINE.read_text(encoding="utf-8")
-    )
+    expected = json.loads(EVALUATION.DEFAULT_BASELINE.read_text(encoding="utf-8"))
 
     assert actual == expected
 

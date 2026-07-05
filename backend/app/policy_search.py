@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 from app.intent import normalize_vietnamese
@@ -14,8 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 POLICY_DIR = PROJECT_ROOT / "docs" / "policies"
 
 INSUFFICIENT_CONTEXT_ANSWER = (
-    "Mình chưa có đủ thông tin trong các chính sách đáng tin cậy để trả lời "
-    "chính xác câu hỏi này."
+    "Mình chưa có đủ thông tin trong các chính sách đáng tin cậy để trả lời chính xác câu hỏi này."
 )
 
 
@@ -128,7 +127,7 @@ def _format_section(lines: list[str]) -> str:
     return "\n\n".join(paragraphs)
 
 
-@lru_cache(maxsize=None)
+@cache
 def _load_policy(filename: str) -> tuple[str, dict[str, str]]:
     """Parse one trusted Markdown document into title and H2 sections."""
     path = POLICY_DIR / filename
@@ -186,9 +185,7 @@ def search_policy(query: str) -> PolicySearchResult:
         title, sections = _load_policy(rule.filename)
         answer = sections.get(rule.section)
         if not answer:
-            raise ValueError(
-                f"Trusted policy section missing: {rule.filename}#{rule.section}"
-            )
+            raise ValueError(f"Trusted policy section missing: {rule.filename}#{rule.section}")
         answers.append(answer)
         citations.append(
             Citation(
