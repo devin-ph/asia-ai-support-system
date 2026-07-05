@@ -6,13 +6,13 @@ This project uses a lightweight branch-based workflow to keep `main` stable and 
 
 * `main` must stay stable, runnable, and demo-ready.
 * Do not commit experimental or half-broken work directly to `main`.
-* Create a short-lived branch before making non-trivial changes.
+* Use a short-lived branch for every agent-authored change.
 
 Use branch prefixes consistently:
 
 * `feat/...` for real product features.
 * `fix/...` for bug fixes.
-* `docs/...` for README, AGENTS.md, walkthroughs, architecture notes, and other documentation.
+* `docs/...` for documentation-only changes.
 * `test/...` for adding or updating tests.
 * `chore/...` for tooling, harnessing, setup, verification scripts, dependency/config cleanup.
 * `refactor/...` for code structure changes that should not alter behavior.
@@ -28,21 +28,33 @@ Examples:
 * `refactor/provider-boundaries`
 * `feat/rag-provider`
 
-## Before starting work
+## Branch workflow
 
-Start from an up-to-date `main`:
+Inspect the repository before switching branches or editing files:
+
+```bash
+git status
+git branch --show-current
+git branch --list
+git branch -r
+```
+
+Continue on the current branch only when it clearly matches the task. Otherwise,
+start from an up-to-date `main` and create a focused branch:
 
 ```bash
 git checkout main
 git pull --ff-only origin main
-git status
-```
-
-Then create a focused branch:
-
-```bash
 git checkout -b chore/v0.1.1-alignment
 ```
+
+Do not switch branches or pull while unrelated local changes are present.
+
+Every agent-authored change uses a short-lived branch. In this workflow,
+“trivial” means a wording, formatting, or link correction that does not change
+runnable code, configuration, dependencies, agent instructions, the product or
+API contract, or a safety rule. Trivial changes may use manual verification,
+but they do not bypass branch protection or human review.
 
 ## Commit message rules (Conventional Commits)
 
@@ -70,58 +82,54 @@ git commit -m "test(frontend): cover confirmation flow"
 git commit -m "chore(verify): add unified verification command"
 ```
 
-## Completion flow
+## Commit planning
 
-For small, clear, low-risk tasks, finish by committing the intentional changes
-and pushing the current working branch. For risky, ambiguous, or blocked tasks,
-stop before committing and report the reason.
+When the agent finishes a task, it should propose commit groups instead of
+committing automatically.
 
-Before committing, confirm that the current branch is not `main`:
+Use one commit when the changes are part of one logical unit. Split commits when
+there are clearly separate purposes, such as implementation, tests, docs, or
+workflow/tooling. Use the exact handoff format defined in the root `AGENTS.md`
+so the plan stays consistent across tasks.
 
-```bash
-git branch --show-current
-```
+## Agent-assisted work
 
-If the output is `main`, create an appropriate short-lived branch first:
+For agent-assisted work, keep the workflow simple: make changes on a short-lived
+branch, run relevant checks, then stop before committing. The agent should
+suggest commit grouping and messages, but the human decides when to commit,
+push, and merge.
 
-```bash
-git checkout -b <prefix>/<short-slug>
-```
-
-Recommended command sequence:
+Recommended work sequence:
 
 ```bash
 git status
 git branch --show-current
 python scripts/dev.py verify
-git add <intentional-files-only>
-git commit -m "<type>(<scope>): <short description>"
-git push -u origin <current-branch>
+git diff --name-only
+git diff --stat
 ```
+
+Use `python scripts/dev.py test` for the fast development loop. Use `verify` for
+the final readiness check; it includes tests, deterministic baseline drift,
+frontend typecheck and build, repository hygiene, credential-pattern scanning,
+and diff checks.
 
 Rules:
 
-* Commit only intentional changes.
+* Work on a short-lived branch, not directly on `main`.
+* Keep changes inside the requested scope.
+* Do not commit, push, or merge unless the user explicitly asks.
 * Do not use `git add .` unless the diff has been reviewed and every changed
   file is intentional.
-* Use a Conventional Commits message.
-* Push the current branch to `origin` when authentication is available.
-* Do not push directly to `main`.
-* Do not merge into `main` unless the user explicitly asks.
-* Do not commit secrets, real PII, generated build artifacts, dependency
+* Do not include secrets, real PII, generated build artifacts, dependency
   folders, runtime state, or unrelated local changes.
-* If verification fails, stop and report the failure. Do not commit unless the
-  user explicitly asks for a work-in-progress commit.
-* For docs-only changes, full verification may be replaced with a short manual
-  verification note.
+* If verification fails, report the failure and leave the change uncommitted.
+* A trivial documentation change, as defined above, may use a short manual
+  verification note instead of the full verification command.
 
-After finishing, report:
-
-* changed files and why they changed;
-* verification result;
-* commit hash and message, or why no commit was created;
-* pushed branch, or why push was skipped;
-* any remaining manual follow-up.
+After finishing, use the handoff format in the root `AGENTS.md`. The review
+commands must include working-tree changes because agent work is intentionally
+left uncommitted.
 
 ## Manual review commands
 
@@ -142,6 +150,13 @@ For reviewing staged changes before committing:
 git diff --staged
 ```
 
+For reviewing all committed and uncommitted changes against `main`:
+
+```bash
+git status --short
+git diff main
+```
+
 ## Before merging to main
 
 Run the project verification commands documented in this repo.
@@ -154,6 +169,7 @@ python scripts/dev.py verify
 
 Only merge when:
 
+* intentional changes have been reviewed and committed by the human;
 * the working tree is clean after committing intentional changes;
 * backend tests pass;
 * frontend component tests and typecheck/build pass;
