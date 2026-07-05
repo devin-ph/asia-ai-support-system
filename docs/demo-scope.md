@@ -221,6 +221,8 @@ automated verification:
 - `doctor` validates supported runtimes, exact locked backend dependencies,
   frontend dependencies, application importability, environment configuration,
   and writable local runtime storage.
+- `verify` enforces Ruff lint and format checks for Python under `backend/` and
+  `scripts/`; Python static typechecking remains deferred.
 - Runtime state remains ignored under `var/`; any mutation under the immutable
   `data/fixtures/` directory fails verification.
 - A successful verification may report PR/tag readiness only when the working

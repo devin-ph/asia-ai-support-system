@@ -203,12 +203,12 @@ precision, order-ID extraction accuracy, and confirmation-guardrail pass rate.
 Known misses remain visible; this is a benchmark, not a test that is expected
 to score 100%.
 
-`verify` runs backend and frontend tests, checks the committed evaluation
-snapshot for drift, runs frontend typecheck and production build, validates
-runtime/fixture Git hygiene, scans candidate files for obvious credential
-assignments without printing values, and checks staged and unstaged diffs for
-whitespace errors. Lint and format checks are not included until the project
-adopts those tools explicitly.
+`verify` runs Ruff lint and format checks for `backend/` and `scripts/`, backend
+and frontend tests, checks the committed evaluation snapshot for drift, runs
+frontend typecheck and production build, validates runtime/fixture Git hygiene,
+scans candidate files for obvious credential assignments without printing
+values, and checks staged and unstaged diffs for whitespace errors. Python
+static typechecking remains deferred to a later milestone.
 
 ## Demo script
 
@@ -327,10 +327,10 @@ python scripts/dev.py verify
 
 `test` runs the fast backend and frontend unit/component suites. `eval` measures
 the deterministic product baseline against versioned JSONL cases. `verify` is
-the full-stack “ready to commit / ready for PR” gate and additionally checks the
-baseline snapshot, typecheck, production build, and repository hygiene. This
-keeps the local test loop useful without making it pay the cost of a frontend
-production build.
+the full-stack “ready to commit / ready for PR” gate and additionally checks
+Python lint and formatting, the baseline snapshot, frontend typecheck,
+production build, and repository hygiene. This keeps the local test loop useful
+without making it pay the cost of a frontend production build.
 
 ### Provider boundaries: narrow, replaceable seams
 

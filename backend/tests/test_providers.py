@@ -9,12 +9,12 @@ from pathlib import Path
 
 import httpx
 import pytest
-
 from app.intent import (
     IntentAnalysis,
     IntentLabel,
     SentimentLabel,
 )
+from app.main import create_app
 from app.order_service import (
     ORDER_ACCESS_DENIED_MESSAGE,
     OrderLookupResult,
@@ -47,7 +47,6 @@ from app.schemas import (
 from app.state import DemoState
 from app.storage import load_tickets
 from app.ticket_service import ActionResolution
-from app.main import create_app
 
 
 class FakeAnalyzerProvider:
@@ -230,10 +229,7 @@ def test_policy_provider_contract(provider: PolicyProvider) -> None:
     assert isinstance(grounded, PolicySearchResult)
     assert grounded.answer
     assert grounded.citations
-    assert all(
-        citation.source.startswith("docs/policies/")
-        for citation in grounded.citations
-    )
+    assert all(citation.source.startswith("docs/policies/") for citation in grounded.citations)
     assert all(citation.section for citation in grounded.citations)
     assert insufficient.answer == INSUFFICIENT_CONTEXT_ANSWER
     assert insufficient.citations == ()

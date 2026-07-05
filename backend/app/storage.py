@@ -80,4 +80,3 @@ def save_tickets(
     finally:
         if temporary_path.exists():
             temporary_path.unlink()
-

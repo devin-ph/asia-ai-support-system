@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.intent import (
     IntentLabel,
     SentimentLabel,
@@ -50,4 +49,3 @@ def test_analyze_message_combines_both_results() -> None:
     result = analyze_message("Tôi thất vọng và muốn tạo phiếu hỗ trợ")
     assert result.intent == IntentLabel.TICKET_REQUEST
     assert result.sentiment == SentimentLabel.NEGATIVE
-

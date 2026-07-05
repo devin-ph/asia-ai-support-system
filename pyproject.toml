@@ -2,9 +2,16 @@
 testpaths = ["backend/tests"]
 pythonpath = ["backend"]
 
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = []
+
 [tool.pyrefly]
 preset = "basic"
 project-includes = ["backend/**/*.py", "scripts/**/*.py"]
 search-path = ["backend"]
 python-version = "3.10"
-python-interpreter-path = ".venv/Scripts/python.exe"

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.policy_search import (
     INSUFFICIENT_CONTEXT_ANSWER,
     search_policy,

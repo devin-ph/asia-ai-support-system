@@ -76,18 +76,12 @@ def load_jsonl(path: Path) -> tuple[dict[str, Any], ...]:
                 f"{path.name}:{line_number}: invalid JSON: {exc.msg}"
             ) from exc
         if not isinstance(case, dict):
-            raise EvaluationDataError(
-                f"{path.name}:{line_number}: each case must be an object"
-            )
+            raise EvaluationDataError(f"{path.name}:{line_number}: each case must be an object")
         case_id = case.get("id")
         if not isinstance(case_id, str) or not case_id.strip():
-            raise EvaluationDataError(
-                f"{path.name}:{line_number}: id must be a non-empty string"
-            )
+            raise EvaluationDataError(f"{path.name}:{line_number}: id must be a non-empty string")
         if case_id in seen_ids:
-            raise EvaluationDataError(
-                f"{path.name}:{line_number}: duplicate id {case_id!r}"
-            )
+            raise EvaluationDataError(f"{path.name}:{line_number}: duplicate id {case_id!r}")
         seen_ids.add(case_id)
         cases.append(case)
 
@@ -100,9 +94,7 @@ def evaluate_intents(cases: tuple[dict[str, Any], ...]) -> MetricResult:
     analyzer = default_chat_providers().analyzer
     failures: list[str] = []
     for case in cases:
-        predicted = analyzer.analyze(
-            _required_string(case, "text")
-        ).intent.value
+        predicted = analyzer.analyze(_required_string(case, "text")).intent.value
         expected = _required_string(case, "expected_intent")
         if predicted != expected:
             failures.append(f"{case['id']}: expected={expected}, got={predicted}")
@@ -141,16 +133,14 @@ def evaluate_policies(
         expected_section = _required_string(case, "expected_section")
         section_total += 1
         hit = any(
-            Path(citation.source).name == expected_policy
-            and citation.section == expected_section
+            Path(citation.source).name == expected_policy and citation.section == expected_section
             for citation in result.citations
         )
         if hit:
             section_hits += 1
         else:
             returned = [
-                f"{Path(citation.source).name}#{citation.section}"
-                for citation in result.citations
+                f"{Path(citation.source).name}#{citation.section}" for citation in result.citations
             ]
             section_failures.append(
                 f"{case['id']}: expected={expected_policy}#{expected_section}, "
@@ -174,14 +164,10 @@ def evaluate_order_extraction(
     for case in cases:
         expected = case.get("expected_order_id")
         if expected is not None and not isinstance(expected, str):
-            raise EvaluationDataError(
-                f"{case['id']}: expected_order_id must be a string or null"
-            )
+            raise EvaluationDataError(f"{case['id']}: expected_order_id must be a string or null")
         predicted = extract_order_reference(_required_string(case, "text"))
         if predicted != expected:
-            failures.append(
-                f"{case['id']}: expected={expected!r}, got={predicted!r}"
-            )
+            failures.append(f"{case['id']}: expected={expected!r}, got={predicted!r}")
     return MetricResult(len(cases) - len(failures), len(cases), tuple(failures))
 
 
@@ -197,16 +183,10 @@ def _evaluate_ticket_case(case: dict[str, Any], tickets_path: Path) -> list[str]
     if not isinstance(decisions, list) or not all(
         isinstance(decision, bool) for decision in decisions
     ):
-        raise EvaluationDataError(
-            f"{case['id']}: decisions must be a list of booleans"
-        )
+        raise EvaluationDataError(f"{case['id']}: decisions must be a list of booleans")
 
     mode = _required_string(case, "mode")
-    target_id = (
-        "act_missing"
-        if mode == "unknown_action"
-        else action.action_id
-    )
+    target_id = "act_missing" if mode == "unknown_action" else action.action_id
     if mode == "concurrent":
         with ThreadPoolExecutor(max_workers=len(decisions) or 1) as executor:
             resolutions = list(
@@ -220,41 +200,30 @@ def _evaluate_ticket_case(case: dict[str, Any], tickets_path: Path) -> list[str]
             )
     elif mode in {"sequential", "unknown_action"}:
         resolutions = [
-            provider.resolve_action(target_id, confirm=decision)
-            for decision in decisions
+            provider.resolve_action(target_id, confirm=decision) for decision in decisions
         ]
     else:
-        raise EvaluationDataError(
-            f"{case['id']}: unsupported ticket mode {mode!r}"
-        )
+        raise EvaluationDataError(f"{case['id']}: unsupported ticket mode {mode!r}")
 
     actual_statuses = [
-        resolution.status.value if resolution is not None else None
-        for resolution in resolutions
+        resolution.status.value if resolution is not None else None for resolution in resolutions
     ]
     expected_statuses = case.get("expected_statuses")
     if actual_statuses != expected_statuses:
-        failures.append(
-            f"statuses expected={expected_statuses!r}, got={actual_statuses!r}"
-        )
+        failures.append(f"statuses expected={expected_statuses!r}, got={actual_statuses!r}")
 
     if "expected_repeated" in case:
         actual_repeated = [
-            resolution.repeated if resolution is not None else None
-            for resolution in resolutions
+            resolution.repeated if resolution is not None else None for resolution in resolutions
         ]
         if actual_repeated != case["expected_repeated"]:
             failures.append(
-                "repeated flags "
-                f"expected={case['expected_repeated']!r}, got={actual_repeated!r}"
+                f"repeated flags expected={case['expected_repeated']!r}, got={actual_repeated!r}"
             )
 
     expected_count = case.get("expected_ticket_count")
     persisted_count = len(load_tickets(tickets_path))
-    if (
-        provider.ticket_count != expected_count
-        or persisted_count != expected_count
-    ):
+    if provider.ticket_count != expected_count or persisted_count != expected_count:
         failures.append(
             f"ticket count expected={expected_count!r}, "
             f"memory={provider.ticket_count}, persisted={persisted_count}"
@@ -290,9 +259,7 @@ def evaluate_ticket_guardrail(
 def _required_string(case: dict[str, Any], field: str) -> str:
     value = case.get(field)
     if not isinstance(value, str):
-        raise EvaluationDataError(
-            f"{case.get('id', '<unknown>')}: {field} must be a string"
-        )
+        raise EvaluationDataError(f"{case.get('id', '<unknown>')}: {field} must be a string")
     return value
 
 
@@ -309,9 +276,7 @@ def run_evaluation() -> dict[str, MetricResult]:
         "policy_section_hit_rate": policy_hit_rate,
         "insufficient_context_precision": insufficient_precision,
         "order_id_extraction_accuracy": evaluate_order_extraction(order_cases),
-        "confirmation_guardrail_pass_rate": evaluate_ticket_guardrail(
-            ticket_cases
-        ),
+        "confirmation_guardrail_pass_rate": evaluate_ticket_guardrail(ticket_cases),
     }
 
 
@@ -320,19 +285,14 @@ def build_snapshot(results: dict[str, MetricResult]) -> dict[str, Any]:
     return {
         "baseline_id": "deterministic-v0.1",
         "evaluator_schema_version": 1,
-        "metrics": {
-            name: result.snapshot() for name, result in results.items()
-        },
+        "metrics": {name: result.snapshot() for name, result in results.items()},
     }
 
 
 def _print_report(results: dict[str, MetricResult]) -> None:
     print("A.S.I.A deterministic evaluation baseline\n")
     for name, result in results.items():
-        print(
-            f"{name}: {result.score:.1%} "
-            f"({result.passed}/{result.total})"
-        )
+        print(f"{name}: {result.score:.1%} ({result.passed}/{result.total})")
         for failure in result.failures:
             print(f"  - {failure}")
 

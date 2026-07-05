@@ -21,12 +21,8 @@ def _empty_ticket_path(tmp_path: Path) -> Path:
 
 
 def test_default_ticket_paths_separate_seed_from_runtime() -> None:
-    assert DEMO_TICKETS_SEED_PATH.as_posix().endswith(
-        "data/fixtures/demo_tickets.seed.json"
-    )
-    assert DEMO_TICKETS_PATH.as_posix().endswith(
-        "var/demo_tickets.json"
-    )
+    assert DEMO_TICKETS_SEED_PATH.as_posix().endswith("data/fixtures/demo_tickets.seed.json")
+    assert DEMO_TICKETS_PATH.as_posix().endswith("var/demo_tickets.json")
     assert DEMO_TICKETS_SEED_PATH != DEMO_TICKETS_PATH
     assert load_tickets(DEMO_TICKETS_SEED_PATH) == ()
 
@@ -81,10 +77,7 @@ def test_missing_runtime_store_starts_from_immutable_seed(
     assert resolution is not None
     assert runtime_path.exists() is True
     assert len(load_tickets(runtime_path)) == 1
-    assert (
-        DEMO_TICKETS_SEED_PATH.read_text(encoding="utf-8")
-        == seed_before
-    )
+    assert DEMO_TICKETS_SEED_PATH.read_text(encoding="utf-8") == seed_before
 
 
 def test_decline_never_creates_a_ticket(tmp_path: Path) -> None:
@@ -130,8 +123,6 @@ def test_concurrent_confirmations_create_one_ticket(tmp_path: Path) -> None:
             )
         )
 
-    ticket_ids = {
-        result.ticket_id for result in results if result is not None
-    }
+    ticket_ids = {result.ticket_id for result in results if result is not None}
     assert len(ticket_ids) == 1
     assert len(load_tickets(tickets_path)) == 1

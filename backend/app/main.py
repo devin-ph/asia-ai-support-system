@@ -74,9 +74,7 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
             ToolEvent(
                 tool=ToolName.POLICY_SEARCH,
                 status=(
-                    ToolEventStatus.COMPLETED
-                    if citations
-                    else ToolEventStatus.INSUFFICIENT_CONTEXT
+                    ToolEventStatus.COMPLETED if citations else ToolEventStatus.INSUFFICIENT_CONTEXT
                 ),
             )
         )
@@ -98,8 +96,7 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
             )
     elif intent == IntentLabel.TICKET_REQUEST:
         assistant_message = (
-            "Mình đã chuẩn bị một phiếu hỗ trợ nháp. "
-            "Vui lòng kiểm tra và xác nhận trước khi tạo."
+            "Mình đã chuẩn bị một phiếu hỗ trợ nháp. Vui lòng kiểm tra và xác nhận trước khi tạo."
         )
         pending_action = state.draft_ticket(req.message)
 
@@ -141,11 +138,7 @@ async def confirm_action(
             else "Phiếu hỗ trợ đã được tạo thành công."
         )
     else:
-        message = (
-            "Yêu cầu đã bị hủy trước đó."
-            if resolution.repeated
-            else "Yêu cầu đã được hủy."
-        )
+        message = "Yêu cầu đã bị hủy trước đó." if resolution.repeated else "Yêu cầu đã được hủy."
 
     return ActionConfirmResponse(
         action_id=action_id,
@@ -174,9 +167,7 @@ def create_app(
         redoc_url="/redoc",
     )
     application.state.demo_state = state or DemoState()
-    application.state.chat_providers = (
-        chat_providers or default_chat_providers()
-    )
+    application.state.chat_providers = chat_providers or default_chat_providers()
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[

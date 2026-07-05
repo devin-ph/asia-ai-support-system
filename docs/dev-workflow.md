@@ -87,9 +87,27 @@ git commit -m "chore(verify): add unified verification command"
 When the agent finishes a task, it should propose commit groups instead of
 committing automatically.
 
+Commit proposals should be actionable. Prefer copyable shell commands with
+explicit paths:
+
+```bash
+git add -- <file> <file>
+git commit -m "<type>(optional-scope): <short description>"
+```
+
+If a file mixes logical changes with mechanical formatting, suggest
+interactive staging instead:
+
+```bash
+git add -p <file>
+```
+
 Use one commit when the changes are part of one logical unit. Split commits when
 there are clearly separate purposes, such as implementation, tests, docs, or
 workflow/tooling.
+
+When introducing a formatter or linter, prefer separate commits for tool
+configuration, mechanical formatting changes, and documentation updates.
 
 See the root `AGENTS.md` for review summary and commit proposal guidance.
 
@@ -130,69 +148,3 @@ Rules:
 
 Final response should include a natural review summary followed by a lightweight
 commit proposal as described in the root `AGENTS.md`.
-
-## Branch cleanup
-
-After a branch has been merged into `main` and `main` is stable, delete the
-branch locally and remotely if it is no longer needed.
-
-Always switch away from the branch before deleting it:
-
-```bash
-git checkout main
-git pull --ff-only origin main
-```
-
-Check merged local branches:
-
-```bash
-git branch --merged main
-```
-
-Delete a merged local branch:
-
-```bash
-git branch -d branch-name
-```
-
-If a branch was integrated through squash merge or rebase, it may not appear in
-git branch --merged main because the original branch commits are not directly
-reachable from main.
-
-Before force-deleting such a branch, inspect what remains different:
-
-```bash
-git log main..branch-name --oneline
-git diff main...branch-name --stat
-```
-
-Only force-delete when the branch's work is already integrated, intentionally
-superseded, or no longer needed:
-
-```bash
-git branch -D branch-name
-```
-
-Delete the remote branch when it still exists:
-
-```bash
-git push origin --delete branch-name
-```
-
-Some hosting platforms can automatically delete remote branches after merge.
-After remote cleanup, sync/prune stale remote-tracking references:
-
-```bash
-git fetch --prune origin
-```
-
-Use `git branch -D` only when intentionally discarding or cleaning up work that
-has already been accounted for.
-
-Do not delete:
-
-* `main`;
-* the current branch;
-* unmerged branches;
-* milestone tags;
-* branches that intentionally preserve a long-running experiment.

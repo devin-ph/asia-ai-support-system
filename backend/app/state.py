@@ -4,15 +4,15 @@ from pathlib import Path
 from threading import RLock
 
 from app.intent import IntentLabel, SentimentLabel
-from app.schemas import (
-    ActionStatus,
-    AdminOverview,
-    PendingAction,
-)
 from app.providers.tickets import (
     ActionResolution,
     LocalTicketProvider,
     TicketProvider,
+)
+from app.schemas import (
+    ActionStatus,
+    AdminOverview,
+    PendingAction,
 )
 from app.storage import DEMO_TICKETS_PATH
 
@@ -27,9 +27,7 @@ class DemoState:
         ticket_provider: TicketProvider | None = None,
     ) -> None:
         self._lock = RLock()
-        self._ticket_provider = (
-            ticket_provider or LocalTicketProvider(tickets_path)
-        )
+        self._ticket_provider = ticket_provider or LocalTicketProvider(tickets_path)
         self._total_messages = 0
         self._intent_counts = {label.value: 0 for label in IntentLabel}
         self._sentiment_counts = {label.value: 0 for label in SentimentLabel}
