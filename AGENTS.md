@@ -119,7 +119,7 @@ Changed files:
     - <file>
 
 Suggested merge commit:
-  "merge: <summary>"
+  "merge: <short summary>"
 ```
 
 Must not:

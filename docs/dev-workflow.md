@@ -12,7 +12,6 @@ Use branch prefixes consistently:
 
 * `feat/...` for real product features.
 * `fix/...` for bug fixes.
-* `docs/...` for documentation-only changes.
 * `test/...` for adding or updating tests.
 * `chore/...` for tooling, harnessing, setup, verification scripts, dependency/config cleanup.
 * `refactor/...` for code structure changes that should not alter behavior.
@@ -22,7 +21,6 @@ Examples:
 
 * `chore/v0.1.1-alignment`
 * `fix/runtime-ticket-storage`
-* `docs/frontend-agents`
 * `test/frontend-confirmation-flow`
 * `ci/github-actions-verify`
 * `refactor/provider-boundaries`
@@ -66,7 +64,6 @@ Common types:
 
 * `feat`: new feature
 * `fix`: bug fix
-* `docs`: documentation changes
 * `test`: adding or updating tests
 * `chore`: tooling, scripts, config, maintenance
 * `refactor`: code changes without behavior change
@@ -77,7 +74,6 @@ Examples:
 ```bash
 git commit -m "feat(rag): add provider abstraction"
 git commit -m "fix(runtime): persist ticket storage correctly"
-git commit -m "docs(frontend): add AGENTS.md for UI rules"
 git commit -m "test(frontend): cover confirmation flow"
 git commit -m "chore(verify): add unified verification command"
 ```
@@ -196,19 +192,6 @@ Guidelines:
 * Use a clear merge commit message describing what is being integrated.
 * Prefer `--no-ff` to keep a visible history of feature/chore branches.
 * After merging, verify again on `main` if needed.
-
-## Milestones and tags
-
-Use Git tags to mark stable demo milestones.
-
-Examples:
-
-```bash
-git tag -a v0.1.0 -m "A.S.I.A v0.1 runnable vertical slice"
-git push origin v0.1.0
-```
-
-Use tags for stable snapshots. Do not keep many long-lived demo branches unless there is a specific reason.
 
 ## Branch cleanup
 
