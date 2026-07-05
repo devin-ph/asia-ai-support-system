@@ -676,7 +676,7 @@ def _check_obvious_secrets() -> bool:
 
 def _check_git_whitespace() -> bool:
     """Check staged and unstaged diffs for whitespace errors."""
-    print(f"\n{_bold('[Git diff check]')}")
+    print(f"\n{_bold('[Git whitespace check]')}")
     checks = (
         ("unstaged", ["git", "diff", "--check"]),
         ("staged", ["git", "diff", "--cached", "--check"]),
@@ -699,8 +699,93 @@ def _check_git_whitespace() -> bool:
                 print(result.stderr.rstrip())
 
     if passed:
-        print(_green(f"  {_OK} Staged and unstaged diffs are clean."))
+        print(
+            _green(
+                f"  {_OK} No whitespace errors in staged or unstaged diffs."
+            )
+        )
     return passed
+
+
+def _inspect_working_tree() -> tuple[bool, bool]:
+    """Return whether Git status was read and whether the tree is clean."""
+    print(f"\n{_bold('[Working tree status]')}")
+    result = subprocess.run(
+        [
+            "git",
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(_red(f"  {_FAIL} Could not inspect the working tree."))
+        if result.stderr.strip():
+            print(result.stderr.rstrip())
+        return False, False
+
+    entries = tuple(line for line in result.stdout.splitlines() if line)
+    if not entries:
+        print(_green(f"  {_OK} Working tree is clean."))
+        return True, True
+
+    tracked = sum(not entry.startswith("??") for entry in entries)
+    untracked = len(entries) - tracked
+    details = []
+    if tracked:
+        details.append(f"{tracked} tracked change(s)")
+    if untracked:
+        details.append(f"{untracked} untracked file(s)")
+    print(
+        _yellow(
+            f"  {_WARN} Working tree is not clean: {', '.join(details)}."
+        )
+    )
+    for entry in entries:
+        print(f"    {entry}")
+    return True, False
+
+
+def _report_verification_summary(
+    results: list[tuple[str, bool]],
+    *,
+    working_tree_clean: bool,
+) -> int:
+    """Print the final verification outcome without overstating readiness."""
+    passed = sum(result for _label, result in results)
+    total = len(results)
+    print(f"\n{_bold('Verification summary')}")
+    for label, result in results:
+        marker = _green(_OK) if result else _red(_FAIL)
+        print(f"  {marker} {label}")
+    if working_tree_clean:
+        print(f"  {_green(_OK)} Working tree clean")
+    else:
+        print(f"  {_yellow(_WARN)} Working tree has uncommitted changes")
+    print(f"\n{passed}/{total} verification steps passed.")
+
+    if passed != total:
+        print(_red("\nVerification failed. Fix the checks above and retry."))
+        return 1
+    if not working_tree_clean:
+        print(
+            _yellow(
+                "\nVerification passed, but working tree has uncommitted "
+                "changes.\nCommit/stash/discard them before tagging or "
+                "opening a PR."
+            )
+        )
+        return 0
+
+    print(
+        _green(
+            "\nVerification passed. Working tree clean. Ready for PR/tag."
+        )
+    )
+    return 0
 
 
 def cmd_verify(_args: argparse.Namespace) -> int:
@@ -786,23 +871,17 @@ def cmd_verify(_args: argparse.Namespace) -> int:
         (
             ("Runtime hygiene", _check_runtime_hygiene()),
             ("Obvious secret scan", _check_obvious_secrets()),
-            ("Git diff check", _check_git_whitespace()),
+            ("Git whitespace check", _check_git_whitespace()),
         )
     )
 
-    passed = sum(result for _label, result in results)
-    total = len(results)
-    print(f"\n{_bold('Verification summary')}")
-    for label, result in results:
-        marker = _green(_OK) if result else _red(_FAIL)
-        print(f"  {marker} {label}")
-    print(f"\n{passed}/{total} verification steps passed.")
-
-    if passed == total:
-        print(_green("\nReady to commit / ready for PR."))
-        return 0
-    print(_red("\nVerification failed. Fix the checks above and retry."))
-    return 1
+    status_read, working_tree_clean = _inspect_working_tree()
+    if not status_read:
+        results.append(("Working tree inspection", False))
+    return _report_verification_summary(
+        results,
+        working_tree_clean=working_tree_clean,
+    )
 
 
 # ---------------------------------------------------------------------------

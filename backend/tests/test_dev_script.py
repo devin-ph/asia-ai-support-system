@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 from types import ModuleType
 
@@ -130,3 +131,125 @@ def test_runtime_directory_must_be_writable(
     assert DEV._check_runtime_writable() is True
     assert runtime_dir.is_dir()
     assert tuple(runtime_dir.iterdir()) == ()
+
+
+def test_git_whitespace_check_is_separate_from_working_tree_status(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[list[str]] = []
+
+    def clean_diff(
+        command: list[str],
+        **_kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(DEV.subprocess, "run", clean_diff)
+
+    assert DEV._check_git_whitespace() is True
+    assert calls == [
+        ["git", "diff", "--check"],
+        ["git", "diff", "--cached", "--check"],
+    ]
+    output = capsys.readouterr().out
+    assert "No whitespace errors" in output
+    assert "diffs are clean" not in output
+
+
+def test_git_whitespace_error_fails_the_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def whitespace_error(
+        command: list[str],
+        **_kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            command,
+            2 if "--cached" not in command else 0,
+            "README.md:1: trailing whitespace.\n",
+            "",
+        )
+
+    monkeypatch.setattr(DEV.subprocess, "run", whitespace_error)
+
+    assert DEV._check_git_whitespace() is False
+
+
+@pytest.mark.parametrize(
+    ("porcelain", "expected_clean"),
+    [
+        ("", True),
+        (" M AGENTS.md\n", False),
+        ("?? notes.txt\n", False),
+    ],
+)
+def test_working_tree_status_detects_tracked_and_untracked_changes(
+    porcelain: str,
+    expected_clean: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def git_status(
+        command: list[str],
+        **_kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        assert command == [
+            "git",
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+        ]
+        return subprocess.CompletedProcess(command, 0, porcelain, "")
+
+    monkeypatch.setattr(DEV.subprocess, "run", git_status)
+
+    status_read, working_tree_clean = DEV._inspect_working_tree()
+
+    assert status_read is True
+    assert working_tree_clean is expected_clean
+
+
+def test_clean_verification_is_ready_for_pr_or_tag(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = DEV._report_verification_summary(
+        [("Git whitespace check", True)],
+        working_tree_clean=True,
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "Verification passed. Working tree clean. Ready for PR/tag." in output
+
+
+def test_dirty_verification_passes_without_claiming_readiness(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = DEV._report_verification_summary(
+        [("Git whitespace check", True)],
+        working_tree_clean=False,
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert (
+        "Verification passed, but working tree has uncommitted changes."
+        in output
+    )
+    assert "Commit/stash/discard them before tagging or opening a PR." in output
+    assert "Ready for PR/tag" not in output
+
+
+def test_failed_verification_stays_failed_even_with_dirty_tree(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = DEV._report_verification_summary(
+        [("Git whitespace check", False)],
+        working_tree_clean=False,
+    )
+
+    assert exit_code == 1
+    output = capsys.readouterr().out
+    assert "Verification failed." in output
+    assert "Verification passed" not in output
