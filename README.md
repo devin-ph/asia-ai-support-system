@@ -175,6 +175,10 @@ Before committing or opening a pull request, run the full-project verification:
 python scripts/dev.py verify
 ```
 
+GitHub Actions repeats `doctor` and `verify` from a clean checkout on Python
+3.10 and 3.12 with Node.js 22. Local verification remains the fastest feedback
+loop; CI is the independent reproducibility check for pull requests and `main`.
+
 To inspect the product-level deterministic baseline separately:
 
 ```bash

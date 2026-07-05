@@ -4,7 +4,7 @@
 
 A.S.I.A is a demo AI customer support system for Vietnamese e-commerce support.
 
-The current milestone is **v0.1: Runnable Vertical Slice**.
+The current milestone is **v0.1.1: Reproducibility Hardening**.
 
 ## Current Goal
 
@@ -25,6 +25,11 @@ Read documents in this order:
 4. `frontend/AGENTS.md` when working inside `frontend/`
 
 Do not implement features outside `docs/demo-scope.md` unless the user explicitly requests them.
+
+Any change to required flows, API shapes, intent or sentiment labels, tool
+semantics, storage behavior, safety invariants, or milestone acceptance
+criteria must update `docs/demo-scope.md` in the same change. If the product
+contract is unaffected, do not edit the scope document merely for churn.
 
 ## Commands
 
@@ -106,13 +111,18 @@ Before handing work back, the agent must:
 * Group changed files into logical commits and suggest Conventional Commit
   messages.
 
-After completing work, report exactly in this format:
+After completing work, first provide a concise reviewer note, then provide the structured handoff block.
+
+The reviewer note should cover:
+
+* Key decisions made.
+* Trade-offs or alternatives considered, if any.
+* Files or behavior the reviewer should pay special attention to.
+* Suggested follow-up, if applicable.
+
+Then provide the structured handoff exactly in this format:
 
 ```text
-Branch        : <current-branch>
-Verify        : PASSED | FAILED | SKIPPED (<reason>)
-Scope check   : all changes within scope | <out-of-scope notes>
-
 Changed files:
   Commit 1 – "<type>(optional-scope): <short description>"
     - <file>
@@ -141,6 +151,7 @@ A change is ready for review only when:
   documentation changes, a short manual verification note is acceptable.
 * No non-negotiable invariant is violated.
 * API response shapes remain stable or docs are updated.
+* Product-contract changes update `docs/demo-scope.md` in the same change.
 * New behavior stays inside the v0.1 scope.
 * No secrets, real PII, generated build artifacts, or dependency folders are committed.
 

@@ -64,6 +64,7 @@ Common types:
 
 * `feat`: new feature
 * `fix`: bug fix
+* `docs`: documentation changes
 * `test`: adding or updating tests
 * `chore`: tooling, scripts, config, maintenance
 * `refactor`: code changes without behavior change
@@ -74,6 +75,7 @@ Examples:
 ```bash
 git commit -m "feat(rag): add provider abstraction"
 git commit -m "fix(runtime): persist ticket storage correctly"
+git commit -m "docs(frontend): add AGENTS.md for UI rules"
 git commit -m "test(frontend): cover confirmation flow"
 git commit -m "chore(verify): add unified verification command"
 ```
@@ -123,79 +125,19 @@ Rules:
 * A trivial documentation change, as defined above, may use a short manual
   verification note instead of the full verification command.
 
-After finishing, use the handoff format in the root `AGENTS.md`. The review
-commands must include working-tree changes because agent work is intentionally
-left uncommitted.
+Final handoff should include a short reviewer note followed by the structured handoff format defined in `AGENTS.md`.
 
-## Manual review commands
+## Branch cleanup
 
-Use these commands to review a branch before merging it into `main`:
+After a branch has been merged into `main` and `main` is stable, delete the
+branch locally and remotely if it is no longer needed.
 
-```bash
-git status
-git branch --show-current
-git log main..HEAD --oneline
-git diff main...HEAD --name-only
-git diff main...HEAD --stat
-git diff main...HEAD
-```
-
-For reviewing staged changes before committing:
-
-```bash
-git diff --staged
-```
-
-For reviewing all committed and uncommitted changes against `main`:
-
-```bash
-git status --short
-git diff main
-```
-
-## Before merging to main
-
-Run the project verification commands documented in this repo.
-
-Use:
-
-```bash
-python scripts/dev.py verify
-```
-
-Only merge when:
-
-* intentional changes have been reviewed and committed by the human;
-* the working tree is clean after committing intentional changes;
-* backend tests pass;
-* frontend component tests and typecheck/build pass;
-* demo-critical flows are not broken;
-* tracked fixtures are not dirtied by runtime/demo data;
-* the change matches the current milestone scope.
-
-## Merge workflow and merge commits
-
-When integrating a branch into `main`, prefer merge commits for non-trivial branches to preserve branch context.
-
-Example:
+Always switch away from the branch before deleting it:
 
 ```bash
 git checkout main
 git pull --ff-only origin main
-git merge --no-ff chore/verification-harness -m "merge: integrate verification harness and workflow guidelines"
-git push origin main
 ```
-
-Guidelines:
-
-* Always ensure the branch has passed verification before merging.
-* Use a clear merge commit message describing what is being integrated.
-* Prefer `--no-ff` to keep a visible history of feature/chore branches.
-* After merging, verify again on `main` if needed.
-
-## Branch cleanup
-
-After a branch has been merged into `main` and `main` is stable, delete the branch locally and remotely if it is no longer needed.
 
 Check merged local branches:
 
@@ -209,17 +151,47 @@ Delete a merged local branch:
 git branch -d branch-name
 ```
 
-Delete the remote branch:
+If a branch was integrated through squash merge or rebase, it may not appear in
+git branch --merged main because the original branch commits are not directly
+reachable from main.
+
+Before force-deleting such a branch, inspect what remains different:
+
+```bash
+git log main..branch-name --oneline
+git diff main...branch-name --stat
+```
+
+Only force-delete when the branch's work is already integrated, intentionally
+superseded, or no longer needed:
+
+```bash
+git branch -D branch-name
+```
+
+Delete the remote branch when it still exists:
 
 ```bash
 git push origin --delete branch-name
 ```
 
-Sync/prune stale remote references:
+Some hosting platforms can automatically delete remote branches after merge.
+After remote cleanup, sync/prune stale remote-tracking references:
 
 ```bash
 git fetch --prune origin
 ```
+
+Do not delete:
+
+main;
+the current branch;
+unmerged branches that still contain useful work;
+milestone tags;
+branches that intentionally preserve a long-running experiment.
+
+Use git branch -D only when intentionally discarding or cleaning up work that
+has already been accounted for.
 
 Do not delete:
 
