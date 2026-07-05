@@ -195,6 +195,8 @@ The milestone is done when:
 - `python scripts/dev.py eval` reports the committed deterministic baseline for
   intent, policy retrieval, order extraction, and ticket confirmation.
 - `python scripts/dev.py verify` passes before a commit or pull request.
+- `python -m pip_audit -r backend/requirements.txt` reports no known Python
+  dependency vulnerabilities.
 - OpenAPI starts locally with `python scripts/dev.py backend`.
 - Tests cover policy grounding, insufficient context, order ownership and safe
   fields, ticket persistence, confirmation idempotency, cancellation, and admin
@@ -223,6 +225,8 @@ automated verification:
   and writable local runtime storage.
 - `verify` enforces Ruff lint and format checks for Python under `backend/` and
   `scripts/`; Python static typechecking remains deferred.
+- `verify --security` adds a vulnerability audit of the complete locked Python
+  dependency set, and CI runs this security variant.
 - Runtime state remains ignored under `var/`; any mutation under the immutable
   `data/fixtures/` directory fails verification.
 - A successful verification may report PR/tag readiness only when the working

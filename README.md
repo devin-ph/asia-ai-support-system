@@ -132,7 +132,7 @@ To intentionally update the lock:
 
 ```bash
 python -m pip install pip-tools
-python -m piptools compile --strip-extras backend/requirements.in -o backend/requirements.txt
+python -m piptools compile --allow-unsafe --strip-extras backend/requirements.in -o backend/requirements.txt
 python -m piptools sync backend/requirements.txt
 python -m pip check
 ```
@@ -185,10 +185,18 @@ Before committing or opening a pull request, run the full-project verification:
 python scripts/dev.py verify
 ```
 
+Run the dependency-security variant before release:
+
+```bash
+python scripts/dev.py verify --security
+```
+
 GitHub Actions repeats `doctor` and `verify` from a clean checkout using two
 representative supported pairs: Python 3.10 with Node.js 20, and Python 3.12
-with the default Node.js 22 LTS. Local verification remains the fastest
-feedback loop; CI is the independent reproducibility check for pull requests
+with the default Node.js 22 LTS. CI invokes `verify --security`, which includes
+`python -m pip_audit -r backend/requirements.txt` against the complete locked
+Python dependency set. Local verification remains the fastest feedback loop;
+CI is the independent reproducibility and vulnerability check for pull requests
 and `main`.
 
 To inspect the product-level deterministic baseline separately:
@@ -207,8 +215,10 @@ to score 100%.
 and frontend tests, checks the committed evaluation snapshot for drift, runs
 frontend typecheck and production build, validates runtime/fixture Git hygiene,
 scans candidate files for obvious credential assignments without printing
-values, and checks staged and unstaged diffs for whitespace errors. Python
-static typechecking remains deferred to a later milestone.
+values, and checks staged and unstaged diffs for whitespace errors.
+`verify --security` additionally audits the locked Python dependencies for known
+vulnerabilities. Python static typechecking remains deferred to a later
+milestone.
 
 ## Demo script
 

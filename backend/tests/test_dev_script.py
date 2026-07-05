@@ -304,6 +304,21 @@ def test_python_quality_gates_use_active_interpreter() -> None:
     )
 
 
+def test_python_security_gate_uses_active_interpreter_and_locked_requirements() -> None:
+    assert DEV._python_security_commands() == (
+        (
+            "Python vulnerability audit",
+            [
+                DEV.sys.executable,
+                "-m",
+                "pip_audit",
+                "-r",
+                "backend/requirements.txt",
+            ],
+        ),
+    )
+
+
 def test_git_whitespace_check_is_separate_from_working_tree_status(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

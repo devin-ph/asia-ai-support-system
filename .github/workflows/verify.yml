@@ -55,4 +55,4 @@ jobs:
         run: python scripts/dev.py doctor
 
       - name: Verify repository
-        run: python scripts/dev.py verify
+        run: python scripts/dev.py verify --security

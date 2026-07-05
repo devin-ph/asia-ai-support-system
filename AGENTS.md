@@ -130,6 +130,8 @@ For multiple commits, provide one command block per commit:
 ```bash
 git add -- <file> <file>
 git commit -m "<type>(optional-scope): <short description>"
+```
+```bash
 git add -- <file> <file>
 git commit -m "<type>(optional-scope): <short description>"
 ```
