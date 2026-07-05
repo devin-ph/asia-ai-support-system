@@ -716,6 +716,7 @@ def _inspect_working_tree() -> tuple[bool, bool]:
             "status",
             "--porcelain=v1",
             "--untracked-files=all",
+            "--ignored=matching",
         ],
         cwd=ROOT,
         capture_output=True,
@@ -727,8 +728,14 @@ def _inspect_working_tree() -> tuple[bool, bool]:
             print(result.stderr.rstrip())
         return False, False
 
-    entries = tuple(line for line in result.stdout.splitlines() if line)
-    if not entries:
+    status_lines = tuple(line for line in result.stdout.splitlines() if line)
+    entries = tuple(line for line in status_lines if not line.startswith("!!"))
+    ignored_warnings = tuple(
+        line
+        for line in status_lines
+        if line.startswith("!!") and _ignored_artifact_requires_review(line[3:])
+    )
+    if not entries and not ignored_warnings:
         print(_green(f"  {_OK} Working tree is clean."))
         return True, True
 
@@ -739,6 +746,10 @@ def _inspect_working_tree() -> tuple[bool, bool]:
         details.append(f"{tracked} tracked change(s)")
     if untracked:
         details.append(f"{untracked} untracked file(s)")
+    if ignored_warnings:
+        details.append(
+            f"{len(ignored_warnings)} ignored local artifact(s) requiring review"
+        )
     print(
         _yellow(
             f"  {_WARN} Working tree is not clean: {', '.join(details)}."
@@ -746,7 +757,20 @@ def _inspect_working_tree() -> tuple[bool, bool]:
     )
     for entry in entries:
         print(f"    {entry}")
+    for entry in ignored_warnings:
+        print(f"    {entry}")
     return True, False
+
+
+def _ignored_artifact_requires_review(path: str) -> bool:
+    """Flag ignored local files that deserve an explicit pre-PR warning."""
+    normalized = path.strip('"').replace("\\", "/").casefold()
+    name = normalized.rsplit("/", maxsplit=1)[-1]
+    return (
+        name == ".env"
+        or name.startswith(".env.")
+        or name.endswith(".log")
+    )
 
 
 def _report_verification_summary(
@@ -764,7 +788,10 @@ def _report_verification_summary(
     if working_tree_clean:
         print(f"  {_green(_OK)} Working tree clean")
     else:
-        print(f"  {_yellow(_WARN)} Working tree has uncommitted changes")
+        print(
+            f"  {_yellow(_WARN)} Working tree changes or local artifact "
+            "warnings require review"
+        )
     print(f"\n{passed}/{total} verification steps passed.")
 
     if passed != total:
@@ -773,9 +800,9 @@ def _report_verification_summary(
     if not working_tree_clean:
         print(
             _yellow(
-                "\nVerification passed, but working tree has uncommitted "
-                "changes.\nCommit/stash/discard them before tagging or "
-                "opening a PR."
+                "\nVerification passed, but working tree review is required."
+                "\nCommit/stash/discard uncommitted changes and review local "
+                "artifacts before tagging or opening a PR."
             )
         )
         return 0

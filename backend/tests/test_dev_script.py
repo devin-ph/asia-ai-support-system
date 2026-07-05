@@ -183,9 +183,13 @@ def test_git_whitespace_error_fails_the_check(
         ("", True),
         (" M AGENTS.md\n", False),
         ("?? notes.txt\n", False),
+        ("!! var/\n", True),
+        ("!! frontend/dist/\n", True),
+        ("!! .env\n", False),
+        ("!! backend/debug.log\n", False),
     ],
 )
-def test_working_tree_status_detects_tracked_and_untracked_changes(
+def test_working_tree_status_classifies_changes_and_ignored_artifacts(
     porcelain: str,
     expected_clean: bool,
     monkeypatch: pytest.MonkeyPatch,
@@ -199,6 +203,7 @@ def test_working_tree_status_detects_tracked_and_untracked_changes(
             "status",
             "--porcelain=v1",
             "--untracked-files=all",
+            "--ignored=matching",
         ]
         return subprocess.CompletedProcess(command, 0, porcelain, "")
 
@@ -234,10 +239,14 @@ def test_dirty_verification_passes_without_claiming_readiness(
     assert exit_code == 0
     output = capsys.readouterr().out
     assert (
-        "Verification passed, but working tree has uncommitted changes."
+        "Verification passed, but working tree review is required."
         in output
     )
-    assert "Commit/stash/discard them before tagging or opening a PR." in output
+    assert (
+        "Commit/stash/discard uncommitted changes and review local artifacts "
+        "before tagging or opening a PR."
+        in output
+    )
     assert "Ready for PR/tag" not in output
 
 
