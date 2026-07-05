@@ -4,7 +4,7 @@ Usage:
     python scripts/dev.py doctor    – verify local prerequisites
     python scripts/dev.py backend   – start the FastAPI dev server
     python scripts/dev.py frontend  – start the frontend dev server
-    python scripts/dev.py test      – run the fast backend test loop
+    python scripts/dev.py test      – run backend and frontend tests
     python scripts/dev.py verify    – run full pre-commit verification
 """
 
@@ -38,7 +38,7 @@ ENV_FILE = ROOT / ".env"
 ENV_EXAMPLE = ROOT / ".env.example"
 
 SUPPORTED_NODE_RANGE = "^20.19.0 || >=22.12.0"
-REQUIRED_FRONTEND_SCRIPTS = ("typecheck", "build")
+REQUIRED_FRONTEND_SCRIPTS = ("test", "typecheck", "build")
 
 _OBVIOUS_SECRET_RE = re.compile(
     r"""(?ix)
@@ -478,29 +478,43 @@ def cmd_frontend(_args: argparse.Namespace) -> int:
 
 
 def cmd_test(_args: argparse.Namespace) -> int:
-    """Run the fast backend test loop with pytest, if available."""
+    """Run the fast backend and frontend test loop."""
     tests_dir = BACKEND_DIR / "tests"
     has_tests = tests_dir.is_dir() and any(tests_dir.glob("test_*.py"))
 
     if not has_tests:
         print(
-            _yellow(
+            _red(
                 "No backend tests found yet.\n"
                 f"Add test files to {tests_dir.relative_to(ROOT)}/ and re-run."
             )
         )
-        return 0
+        return 1
 
-    print(_bold("Running backend tests..."), flush=True)
-    try:
-        proc = subprocess.run(
+    results = [
+        _run_verification_command(
+            "Backend tests",
             [sys.executable, "-m", "pytest", "-v", str(tests_dir)],
             cwd=BACKEND_DIR,
         )
-        return proc.returncode
-    except KeyboardInterrupt:
-        print("\nTests interrupted.")
-        return 1
+    ]
+
+    npm = _npm_command()
+    if npm is None:
+        print(_red(f"\n{_FAIL} npm not found on PATH."))
+        results.append(False)
+    else:
+        results.append(
+            _run_verification_command(
+                "Frontend tests",
+                [npm, "run", "test"],
+                cwd=FRONTEND_DIR,
+            )
+        )
+
+    passed = sum(results)
+    print(f"\n{passed}/{len(results)} test suites passed.")
+    return 0 if all(results) else 1
 
 
 # ---------------------------------------------------------------------------
@@ -696,11 +710,22 @@ def cmd_verify(_args: argparse.Namespace) -> int:
         print(_red(f"\n{_FAIL} npm not found on PATH."))
         results.extend(
             (
+                ("Frontend tests", False),
                 ("Frontend typecheck", False),
                 ("Frontend build", False),
             )
         )
     else:
+        results.append(
+            (
+                "Frontend tests",
+                _run_verification_command(
+                    "Frontend tests",
+                    [npm, "run", "test"],
+                    cwd=FRONTEND_DIR,
+                ),
+            )
+        )
         results.append(
             (
                 "Frontend typecheck",
@@ -760,7 +785,7 @@ def main() -> int:
     sub.add_parser("doctor", help="Check local prerequisites")
     sub.add_parser("backend", help="Run FastAPI dev server")
     sub.add_parser("frontend", help="Run frontend dev server (npm)")
-    sub.add_parser("test", help="Run the fast backend test loop")
+    sub.add_parser("test", help="Run backend and frontend tests")
     sub.add_parser("verify", help="Run full pre-commit verification")
 
     args = parser.parse_args()

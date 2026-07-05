@@ -72,14 +72,26 @@ git commit -m "chore(verify): add unified verification command"
 
 ## Completion flow
 
-For normal implementation tasks, should finish by committing the intentional changes and pushing the current working branch, unless the user says otherwise.
+For normal implementation tasks, must finish by committing the intentional changes and pushing the current working branch.
+
+Before committing, confirm that the current branch is not `main`:
+
+```bash
+git branch --show-current
+```
+
+If the output is main, create an appropriate short-lived branch first:
+```bash
+git checkout -b <prefix>/<short-slug>
+```
 
 Recommended command sequence:
 
 ```bash
 git status
+git branch --show-current
 python scripts/dev.py verify
-git add <intentional-files>
+git add <intentional-files-only>
 git commit -m "<type>(<scope>): <short description>"
 git push -u origin <current-branch>
 ```
@@ -117,7 +129,7 @@ Only merge when:
 
 * the working tree is clean after committing intentional changes;
 * backend tests pass;
-* frontend typecheck/build pass;
+* frontend component tests and typecheck/build pass;
 * demo-critical flows are not broken;
 * tracked fixtures are not dirtied by runtime/demo data;
 * the change matches the current milestone scope.

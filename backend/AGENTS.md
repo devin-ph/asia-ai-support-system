@@ -93,8 +93,10 @@ Run:
 python scripts/dev.py test
 ```
 
-This is the fast backend-only loop. Before committing or opening a pull
-request, run the full repository verification:
+This runs the backend suite plus the frontend unit/component suite. For a
+backend-only iteration, run `python -m pytest backend/tests` from the repository
+root. Before committing or opening a pull request, run the full repository
+verification:
 
 ```bash
 python scripts/dev.py verify

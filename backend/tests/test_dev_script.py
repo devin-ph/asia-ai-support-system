@@ -71,6 +71,7 @@ def test_frontend_scripts_are_required(
                     "node": DEV.SUPPORTED_NODE_RANGE,
                 },
                 "scripts": {
+                    "test": "vitest run",
                     "typecheck": "tsc -b",
                     "build": "tsc -b && vite build",
                 }
@@ -91,6 +92,7 @@ def test_frontend_manifest_must_declare_supported_node_range(
             {
                 "engines": {"node": ">=18"},
                 "scripts": {
+                    "test": "vitest run",
                     "typecheck": "tsc -b",
                     "build": "tsc -b && vite build",
                 },

@@ -43,6 +43,10 @@ project. It must validate supported runtime versions, installed dependencies,
 backend importability, frontend scripts, and writable local state rather than
 only checking whether executables exist.
 
+Use `test` for the fast backend and frontend unit/component test loop. Use
+`verify` before commit or pull request to add frontend typecheck/build and
+repository hygiene checks.
+
 ## Safety Rules
 
 * Use synthetic data only.
@@ -82,23 +86,32 @@ For detailed Git commands, see `docs/dev-workflow.md`.
 
 ## Git Behavior
 
-When completing a non-trivial task, treat commit and push as part of the normal completion flow, unless the user says otherwise.
+For non-trivial implementation, test, refactor, documentation, or tooling tasks, always complete the Git workflow instead of only suggesting Git commands.
 
-Should:
+Must:
 
-* Summarize the intentional changes.
-* Run relevant verification commands when possible.
-* Commit only intentional tracked changes.
-* Use Conventional Commits for the commit message.
-* Push the current working branch to `origin` if authentication is available.
-* Report the branch name, commit hash, verification result, and push result.
+* Check the current branch. If on `main`, create an appropriate short-lived branch first. Never commit directly to `main`.
+* Inspect the working tree with `git status`.
+* Run `python scripts/dev.py verify` before committing code, test, tooling, or behavior changes.
+* For docs-only changes, full verification may be replaced with a short manual verification note.
+* If verification fails, stop and report the failure immediately. Do not commit unless the user explicitly asks for a work-in-progress commit.
+* Stage only intentional files.
+* Create a Conventional Commit.
+* Push the current working branch to `origin` if authentication and remote access are available.
+* Report results in this format:
 
-Should not:
+  Branch   : <name>
+  Commit   : <hash> – "<message>"
+  Verify   : PASSED | FAILED
+  Push     : SUCCESS | FAILED
+  Follow-up: <manual steps or blockers if any>
 
+Must not:
+
+* Commit directly to `main`.
 * Push directly to `main`.
 * Merge into `main` unless the user explicitly asks.
 * Commit secrets, real PII, generated build artifacts, dependency folders, runtime state, or unrelated local changes.
-* Commit after failed verification unless the user explicitly asks for a work-in-progress commit.
 
 For the detailed command sequence, see `docs/dev-workflow.md`.
 

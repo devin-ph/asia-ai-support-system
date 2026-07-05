@@ -55,7 +55,9 @@ add frontend-only fields to API types.
 
 ## Dependencies
 
-- React, ReactDOM, TypeScript, and Vite are the only dependencies.
+- React and ReactDOM are the only runtime dependencies.
+- Frontend test tooling is limited to Vitest, React Testing Library, jsdom, and
+  MSW for this milestone.
 - Node.js must satisfy `^20.19.0 || >=22.12.0` for Vite 7.
 - Install the locked dependency graph with `npm ci`.
 - Do not add Redux, Zustand, TanStack Query, Tailwind, or any UI component
@@ -67,13 +69,17 @@ add frontend-only fields to API types.
 
 ```bash
 npm run dev
+npm run test
+npm run test:watch
 npm run typecheck
 npm run build
 ```
 
-Run `npm run typecheck` before committing frontend changes. A clean
-typecheck is required for the definition of done. Before committing or opening
-a pull request, run the repository-level verification from the project root:
+Tests should exercise visible behavior and HTTP boundaries rather than
+component implementation details or broad snapshots. Run `npm run test` and
+`npm run typecheck` before committing frontend changes. Before committing or
+opening a pull request, run the repository-level verification from the project
+root:
 
 ```bash
 python scripts/dev.py verify

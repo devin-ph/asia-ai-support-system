@@ -129,10 +129,17 @@ Open `http://127.0.0.1:5173`.
 
 ### Run tests
 
-Use the fast backend test loop while developing:
+Run the fast backend and frontend unit/component test loop while developing:
 
 ```bash
 python scripts/dev.py test
+```
+
+For frontend watch mode:
+
+```bash
+cd frontend
+npm run test:watch
 ```
 
 Before committing or opening a pull request, run the full-project verification:
@@ -141,11 +148,11 @@ Before committing or opening a pull request, run the full-project verification:
 python scripts/dev.py verify
 ```
 
-`verify` runs backend tests, frontend typecheck and production build, validates
-runtime/fixture Git hygiene, scans candidate files for obvious credential
-assignments without printing values, and checks staged and unstaged diffs for
-whitespace errors. Lint and format checks are not included until the project
-adopts those tools explicitly.
+`verify` runs backend and frontend tests, frontend typecheck and production
+build, validates runtime/fixture Git hygiene, scans candidate files for obvious
+credential assignments without printing values, and checks staged and unstaged
+diffs for whitespace errors. Lint and format checks are not included until the
+project adopts those tools explicitly.
 
 ## Demo script
 
@@ -261,10 +268,11 @@ python scripts/dev.py test
 python scripts/dev.py verify
 ```
 
-`test` is intentionally backend-only and optimized for the fast development
-loop. `verify` is the full-stack “ready to commit / ready for PR” gate. This
-separation reduces environment guesswork without making every local test run
-pay the cost of a frontend production build.
+`test` runs the fast backend and frontend unit/component suites. `verify` is the
+full-stack “ready to commit / ready for PR” gate and additionally runs
+typecheck, production build, and repository hygiene checks. This keeps the
+local test loop useful without making it pay the cost of a frontend production
+build.
 
 ### Fake providers: deterministic local stand-ins
 
