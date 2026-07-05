@@ -12,6 +12,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import json
 import os
 import re
@@ -29,6 +30,8 @@ ROOT = Path(__file__).resolve().parent.parent
 BACKEND_DIR = ROOT / "backend"
 FRONTEND_DIR = ROOT / "frontend"
 BACKEND_ENTRY = BACKEND_DIR / "app" / "main.py"
+BACKEND_REQUIREMENTS_IN = BACKEND_DIR / "requirements.in"
+BACKEND_REQUIREMENTS_LOCK = BACKEND_DIR / "requirements.txt"
 FRONTEND_PKG = FRONTEND_DIR / "package.json"
 FRONTEND_LOCK = FRONTEND_DIR / "package-lock.json"
 FRONTEND_NODE_MODULES = FRONTEND_DIR / "node_modules"
@@ -204,6 +207,91 @@ def _check_python_module(module: str) -> bool:
         return False
 
 
+def _load_requirement_pins(path: Path) -> dict[str, str]:
+    """Load exact package pins from a pip-compile requirements file."""
+    pins: dict[str, str] = {}
+    invalid: list[str] = []
+    for line_number, raw_line in enumerate(
+        path.read_text(encoding="utf-8").splitlines(),
+        start=1,
+    ):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = re.fullmatch(
+            r"([A-Za-z0-9_.-]+)==([A-Za-z0-9_.+!-]+)",
+            line,
+        )
+        if match is None:
+            invalid.append(f"line {line_number}: {line}")
+            continue
+        name, version = match.groups()
+        normalized_name = re.sub(r"[-_.]+", "-", name).casefold()
+        pins[normalized_name] = version
+
+    if invalid:
+        raise ValueError(
+            "requirements.txt contains non-pinned entries: "
+            + "; ".join(invalid)
+        )
+    if not pins:
+        raise ValueError("requirements.txt contains no package pins")
+    return pins
+
+
+def _check_backend_dependency_lock() -> bool:
+    """Validate the lockfile and ensure this interpreter matches every pin."""
+    try:
+        pins = _load_requirement_pins(BACKEND_REQUIREMENTS_LOCK)
+    except (OSError, ValueError) as exc:
+        print(f"  {_red(_FAIL)} Backend dependency lock is invalid: {exc}")
+        return False
+
+    mismatches: list[str] = []
+    for name, expected in pins.items():
+        try:
+            installed = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            mismatches.append(f"{name} is missing")
+            continue
+        if installed != expected:
+            mismatches.append(
+                f"{name}=={installed} installed, expected {expected}"
+            )
+
+    if mismatches:
+        print(f"  {_red(_FAIL)} Installed backend dependencies do not match lock")
+        for mismatch in mismatches:
+            print(f"    - {mismatch}")
+        print("    Run: python -m pip install -r backend/requirements.txt")
+        return False
+
+    print(
+        f"  {_green(_OK)} Backend dependency lock matches "
+        f"{len(pins)} installed packages"
+    )
+    return True
+
+
+def _check_pip_consistency() -> bool:
+    """Run pip's dependency consistency check for the active interpreter."""
+    result = subprocess.run(
+        [sys.executable, "-m", "pip", "check"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        print(f"  {_green(_OK)} Python dependency graph is consistent")
+        return True
+
+    print(f"  {_red(_FAIL)} Python dependency graph is inconsistent")
+    detail = result.stdout.strip() or result.stderr.strip()
+    if detail:
+        print(f"    {detail.splitlines()[0]}")
+    return False
+
+
 def _check_path(label: str, path: Path, *, required: bool = True) -> bool:
     """Check that *path* exists on disk."""
     if path.exists():
@@ -371,6 +459,22 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
         "anyio",
     ):
         results.append(_check_python_module(module))
+    results.append(
+        _check_path(
+            "backend direct requirements",
+            BACKEND_REQUIREMENTS_IN,
+            required=True,
+        )
+    )
+    results.append(
+        _check_path(
+            "backend dependency lock",
+            BACKEND_REQUIREMENTS_LOCK,
+            required=True,
+        )
+    )
+    results.append(_check_backend_dependency_lock())
+    results.append(_check_pip_consistency())
     results.append(_check_path("backend entry", BACKEND_ENTRY, required=True))
     results.append(_check_backend_import())
 
