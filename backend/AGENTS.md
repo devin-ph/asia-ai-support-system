@@ -101,16 +101,9 @@ python scripts/dev.py test
 python scripts/dev.py eval
 ```
 
-This runs the backend suite plus the frontend unit/component suite. For a
-backend-only iteration, run `python -m pytest backend/tests` from the repository
-root. The separate `eval` command reports product-level deterministic metrics;
-known rule misses are valid baseline results rather than unit-test failures.
-Before committing or opening a pull request, run the full repository
-verification:
-
-```bash
-python scripts/dev.py verify
-```
+For a backend-only iteration, run `python -m pytest backend/tests` from the
+repository root. See [`eval/README.md`](../eval/README.md) for metric
+definitions. Run `python scripts/dev.py verify` before committing.
 
 Tests must construct fresh state with a temporary ticket file and must not
 depend on execution order.

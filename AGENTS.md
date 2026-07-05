@@ -39,15 +39,10 @@ python scripts/dev.py eval
 python scripts/dev.py verify
 ```
 
-Use `doctor` to determine whether a newly cloned environment can run the full
-project. It must validate supported runtime versions, installed dependencies,
-backend importability, frontend scripts, and writable local state rather than
-only checking whether executables exist.
-
-Use `test` for the fast backend and frontend unit/component test loop. Use
-`eval` to measure the versioned deterministic baseline. Use `verify` before
-commit or pull request to add the baseline drift check, frontend
-typecheck/build, and repository hygiene checks.
+`doctor` validates runtime prerequisites. `test` runs the fast unit/component
+loop. `eval` measures the deterministic baseline. `verify` is the pre-commit
+gate. See [`README.md`](README.md) for detailed descriptions and
+[`eval/README.md`](eval/README.md) for metric definitions.
 
 ## Safety Rules
 
@@ -63,6 +58,20 @@ typecheck/build, and repository hygiene checks.
 * Repeated confirmation must not create duplicate tickets.
 * If policy evidence is missing, return an insufficient-context response instead of inventing an answer.
 * Order lookup must only return safe fields and must enforce the fixed demo customer ownership check.
+
+## Non-Negotiable Invariants
+
+These constraints must hold after every change. No exception, no workaround.
+
+1. Chat route must not directly execute irreversible write actions.
+2. Ticket creation must require explicit user confirmation.
+3. Policy answers must cite evidence or return insufficient context.
+4. Demo data must remain synthetic.
+5. Running the demo must not dirty tracked fixtures.
+6. Unauthorized and unknown orders must not leak distinguishable details.
+
+If a proposed change would violate any invariant, stop and report the conflict
+instead of proceeding.
 
 ## Git Behavior
 
@@ -105,16 +114,12 @@ Verify        : PASSED | FAILED | SKIPPED (<reason>)
 Scope check   : all changes within scope | <out-of-scope notes>
 
 Changed files:
-  Commit 1 – "<type>(<scope>): <message>"
+  Commit 1 – "<type>(optional-scope): <short description>"
     - <file>
     - <file>
 
 Suggested merge commit:
   "merge: <summary>"
-
-Review commands:
-  git status --short
-  git diff main
 ```
 
 Must not:
@@ -134,6 +139,10 @@ A change is ready for review only when:
 * Relevant tests pass or a manual verification note is added.
 * `python scripts/dev.py verify` passes before merging to `main`; for trivial
   documentation changes, a short manual verification note is acceptable.
+* No non-negotiable invariant is violated.
 * API response shapes remain stable or docs are updated.
 * New behavior stays inside the v0.1 scope.
 * No secrets, real PII, generated build artifacts, or dependency folders are committed.
+
+See [`docs/demo-scope.md`](docs/demo-scope.md) for the full milestone
+acceptance criteria and product-level definition of done.
