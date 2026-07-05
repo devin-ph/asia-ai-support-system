@@ -33,8 +33,10 @@ DEV = _load_dev_module()
         ("v21.7.3", False),
         ("v22.11.0", False),
         ("v22.12.0", True),
-        ("v23.0.0", True),
-        ("v25.8.1", True),
+        ("v22.99.0", True),
+        ("v23.0.0", False),
+        ("v24.0.0", False),
+        ("v25.8.1", False),
         ("not-a-version", False),
     ],
 )
@@ -43,6 +45,20 @@ def test_node_version_matches_vite_engine_range(
     supported: bool,
 ) -> None:
     assert DEV._node_version_supported(version) is supported
+
+
+def test_default_node_version_file_selects_node_22(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    version_file = tmp_path / ".nvmrc"
+    monkeypatch.setattr(DEV, "NODE_VERSION_FILE", version_file)
+
+    version_file.write_text("22\n", encoding="utf-8")
+    assert DEV._check_default_node_version() is True
+
+    version_file.write_text("25\n", encoding="utf-8")
+    assert DEV._check_default_node_version() is False
 
 
 def test_frontend_scripts_are_required(
