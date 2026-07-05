@@ -11,6 +11,13 @@ The demo deliberately uses no hosted model, vector database, production
 database, or real customer data. Its purpose is to validate safe behavior and
 clear integration boundaries before introducing external infrastructure.
 
+> **Demo-ready ≠ Production-ready.**
+> This repository is a local development demonstration. It has no
+> authentication, no durable storage, no cloud deployment, and no real customer
+> data. The code proves that the product contract, safety invariants, and
+> integration seams work correctly before any of those concerns are added.
+> See [Current limitations](#current-limitations) for the full list.
+
 The complete behavioral contract and safety invariants live in
 [`docs/demo-scope.md`](docs/demo-scope.md).
 
@@ -374,6 +381,18 @@ The guardrail also enforces:
 This separation must remain in place if an LLM or external helpdesk provider is
 introduced later. A model may help draft an action, but it must not receive
 direct authority to execute it.
+
+### Decision log
+
+[`docs/decisions/`](docs/decisions/) contains lightweight Architecture Decision
+Records (ADRs) that capture key technical choices and their rationale:
+
+| ADR | Decision |
+|-----|----------|
+| [001](docs/decisions/001-deterministic-baseline-before-llm.md) | Prove safety with deterministic rules before adding any LLM |
+| [002](docs/decisions/002-provider-boundaries-over-agent-framework.md) | Use narrow provider boundaries, not a generic agent framework |
+| [003](docs/decisions/003-confirmation-guardrail-separation.md) | Separate action proposal from execution |
+| [004](docs/decisions/004-synthetic-data-only-in-v01.md) | All v0.1 data must be synthetic by construction |
 
 ## Current limitations
 
