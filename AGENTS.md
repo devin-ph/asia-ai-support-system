@@ -57,6 +57,8 @@ typecheck/build, and repository hygiene checks.
 * Never add real customer data or real PII.
 * Never commit secrets or API keys.
 * Do not expose write actions directly to a model or chat handler.
+* Keep ticket write providers behind application state and the confirmation
+  endpoint.
 * Ticket creation must require explicit user confirmation.
 * Repeated confirmation must not create duplicate tickets.
 * If policy evidence is missing, return an insufficient-context response instead of inventing an answer.

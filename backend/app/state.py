@@ -9,16 +9,27 @@ from app.schemas import (
     AdminOverview,
     PendingAction,
 )
+from app.providers.tickets import (
+    ActionResolution,
+    LocalTicketProvider,
+    TicketProvider,
+)
 from app.storage import DEMO_TICKETS_PATH
-from app.ticket_service import ActionResolution, TicketService
 
 
 class DemoState:
     """Own mutable demo state and keep confirmation idempotent."""
 
-    def __init__(self, tickets_path: Path = DEMO_TICKETS_PATH) -> None:
+    def __init__(
+        self,
+        tickets_path: Path = DEMO_TICKETS_PATH,
+        *,
+        ticket_provider: TicketProvider | None = None,
+    ) -> None:
         self._lock = RLock()
-        self._ticket_service = TicketService(tickets_path)
+        self._ticket_provider = (
+            ticket_provider or LocalTicketProvider(tickets_path)
+        )
         self._total_messages = 0
         self._intent_counts = {label.value: 0 for label in IntentLabel}
         self._sentiment_counts = {label.value: 0 for label in SentimentLabel}
@@ -43,7 +54,7 @@ class DemoState:
             self._tool_counts[name] += 1
 
     def draft_ticket(self, summary: str) -> PendingAction:
-        return self._ticket_service.draft_ticket(summary)
+        return self._ticket_provider.draft_ticket(summary)
 
     def resolve_action(
         self,
@@ -51,7 +62,7 @@ class DemoState:
         *,
         confirm: bool,
     ) -> ActionResolution | None:
-        resolution = self._ticket_service.resolve_action(
+        resolution = self._ticket_provider.resolve_action(
             action_id,
             confirm=confirm,
         )
@@ -68,7 +79,7 @@ class DemoState:
             tool_counts = self._tool_counts.copy()
             return AdminOverview(
                 total_messages=self._total_messages,
-                total_tickets=self._ticket_service.ticket_count,
+                total_tickets=self._ticket_provider.ticket_count,
                 intent_counts=self._intent_counts.copy(),
                 sentiment_counts=self._sentiment_counts.copy(),
                 tool_calls=sum(tool_counts.values()),

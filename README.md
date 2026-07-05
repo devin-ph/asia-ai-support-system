@@ -289,22 +289,28 @@ baseline snapshot, typecheck, production build, and repository hygiene. This
 keeps the local test loop useful without making it pay the cost of a frontend
 production build.
 
-### Fake providers: deterministic local stand-ins
+### Provider boundaries: narrow, replaceable seams
 
-v0.1 does not yet define a formal `FakeProvider` interface. Instead, small local
-services act as deterministic stand-ins for dependencies that may exist in a
-later milestone:
+`backend/app/providers/` defines four capability-specific boundaries instead of
+a generic agent framework:
 
-| Local stand-in | Replaces for v0.1 |
-| --- | --- |
-| `backend/app/intent.py` | Hosted intent and sentiment model |
-| `backend/app/policy_search.py` | Embedding search, vector database, or hosted retrieval |
-| `backend/app/order_service.py` | Commerce or order-management integration |
-| `backend/app/ticket_service.py` | External helpdesk write API |
+| Boundary | Default implementation | Preserved behavior |
+| --- | --- | --- |
+| Analyzer | deterministic intent and sentiment rules | Public intent and sentiment enums |
+| Policy | allowlisted keyword search | Grounded answer, exact citations, and safe fallback |
+| Orders | synthetic fixture lookup | Ownership denial and safe-field allowlist |
+| Tickets | guarded local ticket service | Draft, explicit confirmation, cancellation, and idempotency |
 
-These stand-ins are fast, inspectable, testable, and offline. Future providers
-should preserve the same public contracts and safety behavior so they can be
-evaluated against the deterministic baseline.
+The chat route receives a `ChatProviders` bundle containing only analyzer,
+policy, and order reads. Ticket providers remain behind `DemoState`: chat can
+request a draft, but only the confirmation endpoint can reach
+`resolve_action`. Replacing a read provider therefore does not alter the HTTP
+request or response models and does not grant a model write authority.
+
+`backend/tests/test_providers.py` runs the same contracts against deterministic
+and fake implementations and verifies that swapping `ChatProviders` preserves
+the stable response envelope. A future provider should be added to these
+parameterized contracts before it is selected at runtime.
 
 ### Evaluation before AI: prove the delta
 
@@ -371,8 +377,8 @@ direct authority to execute it.
 The next milestone should preserve the v0.1 contracts and guardrails while
 replacing local stand-ins incrementally:
 
-1. Formalize provider interfaces and run candidate providers against the
-   committed deterministic baseline.
+1. Implement an optional candidate provider behind the existing boundaries and
+   run it against the committed deterministic baseline and shared contracts.
 2. Expand policy fixtures and Vietnamese evaluation coverage without replacing
    known hard cases merely to improve scores.
 3. Add real authentication and tenant isolation before connecting any commerce
