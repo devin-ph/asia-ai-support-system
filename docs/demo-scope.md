@@ -20,6 +20,9 @@ The application represents one fixed synthetic customer:
 - Display name: `Khách hàng Demo`
 - All orders, policies, actions, and tickets in this milestone are synthetic.
 
+Demo data uses a fixed July 2026 timeline for deterministic tests and
+screenshots.
+
 The API must never return data from an order that is not owned by
 `demo-customer-001`.
 

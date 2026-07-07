@@ -410,6 +410,9 @@ should be reviewed separately where practical to avoid moving the goalposts.
 - `docs/policies/*.md` is the only trusted policy corpus.
 - The fixed identity is `demo-customer-001`.
 
+Demo data uses a fixed July 2026 timeline for deterministic tests and
+screenshots.
+
 No fixture should contain real names, addresses, phone numbers, email
 addresses, payment information, secrets, or production identifiers.
 
