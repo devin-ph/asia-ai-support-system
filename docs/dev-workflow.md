@@ -102,9 +102,14 @@ interactive staging instead:
 git add -p <file>
 ```
 
-Use one commit when the changes are part of one logical unit. Split commits when
-there are clearly separate purposes, such as implementation, tests, docs, or
-workflow/tooling.
+When proposing commits, optimize for code review.
+
+Use one commit when the changes are part of one tightly coupled logical unit.
+Prefer multiple commits when the diff spans clearly different change types
+
+Do not split commits only by file location if the files must change together.
+Do not combine unrelated change types just because they were completed in the
+same branch.
 
 When introducing a formatter or linter, prefer separate commits for tool
 configuration, mechanical formatting changes, and documentation updates.
