@@ -91,6 +91,7 @@ def test_frontend_scripts_are_required(
                     "test": "vitest run",
                     "typecheck": "tsc -b",
                     "build": "tsc -b && vite build",
+                    "e2e": "playwright test",
                 },
             }
         ),
@@ -112,6 +113,7 @@ def test_frontend_manifest_must_declare_supported_node_range(
                     "test": "vitest run",
                     "typecheck": "tsc -b",
                     "build": "tsc -b && vite build",
+                    "e2e": "playwright test",
                 },
             }
         ),
@@ -299,6 +301,21 @@ def test_python_quality_gates_use_active_interpreter() -> None:
                 "--check",
                 "backend",
                 "scripts",
+            ],
+        ),
+    )
+
+
+def test_python_security_gate_uses_active_interpreter_and_locked_requirements() -> None:
+    assert DEV._python_security_commands() == (
+        (
+            "Python vulnerability audit",
+            [
+                DEV.sys.executable,
+                "-m",
+                "pip_audit",
+                "-r",
+                "backend/requirements.txt",
             ],
         ),
     )

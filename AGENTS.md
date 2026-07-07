@@ -111,6 +111,15 @@ Before handing work back, the agent must:
 * Group changed files into logical commits and suggest Conventional Commit
   messages.
 
+Prefer reviewable commit proposals over one large commit. Split commit
+proposals when the diff includes more than one clearly different change type,
+such as code behavior, tests, tooling/configuration, dependencies, CI, docs, or
+mechanical formatting.
+
+Use a single commit only when all changed files are tightly coupled to one
+logical unit. If proposing one commit for multiple change types, briefly explain
+why they should stay together.
+
 After completing work, the agent must provide a review summary followed by a commit proposal.
 
 The review summary should be natural language. Briefly explain what changed,
@@ -130,6 +139,8 @@ For multiple commits, provide one command block per commit:
 ```bash
 git add -- <file> <file>
 git commit -m "<type>(optional-scope): <short description>"
+```
+```bash
 git add -- <file> <file>
 git commit -m "<type>(optional-scope): <short description>"
 ```

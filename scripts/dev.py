@@ -7,6 +7,8 @@ Usage:
     python scripts/dev.py test      – run backend and frontend tests
     python scripts/dev.py eval      – measure the deterministic baseline
     python scripts/dev.py verify    – run full pre-commit verification
+    python scripts/dev.py verify --security
+                                    – include the Python vulnerability audit
 """
 
 from __future__ import annotations
@@ -46,7 +48,7 @@ ENV_EXAMPLE = ROOT / ".env.example"
 
 SUPPORTED_NODE_RANGE = "^20.19.0 || ^22.12.0"
 DEFAULT_NODE_MAJOR = 22
-REQUIRED_FRONTEND_SCRIPTS = ("test", "typecheck", "build")
+REQUIRED_FRONTEND_SCRIPTS = ("test", "typecheck", "build", "e2e")
 
 _OBVIOUS_SECRET_RE = re.compile(
     r"""(?ix)
@@ -976,7 +978,23 @@ def _python_quality_commands() -> tuple[tuple[str, list[str]], ...]:
     )
 
 
-def cmd_verify(_args: argparse.Namespace) -> int:
+def _python_security_commands() -> tuple[tuple[str, list[str]], ...]:
+    """Return opt-in dependency security gates."""
+    return (
+        (
+            "Python vulnerability audit",
+            [
+                sys.executable,
+                "-m",
+                "pip_audit",
+                "-r",
+                BACKEND_REQUIREMENTS_LOCK.relative_to(ROOT).as_posix(),
+            ],
+        ),
+    )
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
     """Run the complete pre-commit and pre-PR verification suite."""
     print(_bold("Running full project verification..."))
     results: list[tuple[str, bool]] = []
@@ -988,6 +1006,15 @@ def cmd_verify(_args: argparse.Namespace) -> int:
                 _run_verification_command(label, command, cwd=ROOT),
             )
         )
+
+    if args.security:
+        for label, command in _python_security_commands():
+            results.append(
+                (
+                    label,
+                    _run_verification_command(label, command, cwd=ROOT),
+                )
+            )
 
     results.append(
         (
@@ -1097,7 +1124,12 @@ def main() -> int:
     sub.add_parser("frontend", help="Run frontend dev server (npm)")
     sub.add_parser("test", help="Run backend and frontend tests")
     sub.add_parser("eval", help="Measure the deterministic baseline")
-    sub.add_parser("verify", help="Run full pre-commit verification")
+    verify_parser = sub.add_parser("verify", help="Run full pre-commit verification")
+    verify_parser.add_argument(
+        "--security",
+        action="store_true",
+        help="Include the Python dependency vulnerability audit",
+    )
 
     args = parser.parse_args()
 
