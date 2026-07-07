@@ -56,8 +56,8 @@ add frontend-only fields to API types.
 ## Dependencies
 
 - React and ReactDOM are the only runtime dependencies.
-- Frontend test tooling is limited to Vitest, React Testing Library, jsdom, and
-  MSW for this milestone.
+- Frontend unit/component test tooling uses Vitest, React Testing Library,
+  jsdom, and MSW. Browser E2E coverage uses Playwright.
 - Node.js 22 LTS is the repository default selected by `../.nvmrc`.
 - Node.js must satisfy `^20.19.0 || ^22.12.0`; odd and future major versions
   are intentionally unsupported until they are reviewed and added explicitly.
@@ -71,6 +71,7 @@ add frontend-only fields to API types.
 
 ```bash
 npm run dev
+npm run e2e
 npm run test
 npm run test:watch
 npm run typecheck

@@ -60,6 +60,7 @@ API:
 - FastAPI and Pydantic
 - Pytest, HTTPX, and AnyIO
 - React, TypeScript, and Vite
+- Playwright browser E2E for the four demo flows
 - Local Markdown policies and validated synthetic JSON storage
 - Process-local actions and aggregate counters
 
@@ -179,6 +180,15 @@ cd frontend
 npm run test:watch
 ```
 
+Run the minimal browser E2E flow against real local backend and frontend
+servers:
+
+```bash
+cd frontend
+npx playwright install chromium
+npm run e2e
+```
+
 Before committing or opening a pull request, run the full-project verification:
 
 ```bash
@@ -212,7 +222,7 @@ Known misses remain visible; this is a benchmark, not a test that is expected
 to score 100%.
 
 `verify` runs Ruff lint and format checks for `backend/` and `scripts/`, backend
-and frontend tests, checks the committed evaluation snapshot for drift, runs
+and frontend unit/component tests, checks the committed evaluation snapshot for drift, runs
 frontend typecheck and production build, validates runtime/fixture Git hygiene,
 scans candidate files for obvious credential assignments without printing
 values, and checks staged and unstaged diffs for whitespace errors.
