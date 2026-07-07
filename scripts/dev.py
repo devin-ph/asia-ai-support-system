@@ -4,6 +4,8 @@ Usage:
     python scripts/dev.py doctor    – verify local prerequisites
     python scripts/dev.py backend   – start the FastAPI dev server
     python scripts/dev.py frontend  – start the frontend dev server
+    python scripts/dev.py reset-demo
+                                  – reset ignored local demo runtime state
     python scripts/dev.py test      – run backend and frontend tests
     python scripts/dev.py eval      – measure the deterministic baseline
     python scripts/dev.py verify    – run full pre-commit verification
@@ -624,6 +626,42 @@ def cmd_frontend(_args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Reset demo runtime
+# ---------------------------------------------------------------------------
+
+
+def _reset_demo_tickets() -> None:
+    """Reset local ticket runtime state from the immutable seed fixture."""
+    seed_payload = json.loads(TICKET_SEED.read_text(encoding="utf-8"))
+    if not isinstance(seed_payload, list):
+        raise ValueError("ticket seed must contain a JSON list")
+
+    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    RUNTIME_TICKETS.write_text(
+        f"{json.dumps(seed_payload, ensure_ascii=False, indent=2)}\n",
+        encoding="utf-8",
+    )
+
+
+def cmd_reset_demo(_args: argparse.Namespace) -> int:
+    """Reset ignored local runtime state for a clean demo."""
+    print(_bold("Resetting local demo runtime state..."))
+    try:
+        _reset_demo_tickets()
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        print(_red(f"{_FAIL} Could not reset demo tickets: {exc}"))
+        return 1
+
+    print(
+        _green(
+            f"{_OK} Reset {RUNTIME_TICKETS.relative_to(ROOT).as_posix()} "
+            f"from {TICKET_SEED.relative_to(ROOT).as_posix()}"
+        )
+    )
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Test
 # ---------------------------------------------------------------------------
 
@@ -1122,6 +1160,7 @@ def main() -> int:
     sub.add_parser("doctor", help="Check local prerequisites")
     sub.add_parser("backend", help="Run FastAPI dev server")
     sub.add_parser("frontend", help="Run frontend dev server (npm)")
+    sub.add_parser("reset-demo", help="Reset ignored local demo runtime state")
     sub.add_parser("test", help="Run backend and frontend tests")
     sub.add_parser("eval", help="Measure the deterministic baseline")
     verify_parser = sub.add_parser("verify", help="Run full pre-commit verification")
@@ -1137,6 +1176,7 @@ def main() -> int:
         "doctor": cmd_doctor,
         "backend": cmd_backend,
         "frontend": cmd_frontend,
+        "reset-demo": cmd_reset_demo,
         "test": cmd_test,
         "eval": cmd_eval,
         "verify": cmd_verify,

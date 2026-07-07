@@ -165,6 +165,18 @@ python scripts/dev.py frontend
 
 Open `http://127.0.0.1:5173`.
 
+### Reset demo runtime state
+
+To return the local demo to a clean ticket runtime state:
+
+```bash
+python scripts/dev.py reset-demo
+```
+
+This resets `var/demo_tickets.json` from the immutable
+`data/fixtures/demo_tickets.seed.json` fixture. It does not touch files under
+`data/fixtures/` or reset the evaluation snapshot.
+
 ### Run tests
 
 Run the fast backend and frontend unit/component test loop while developing:
@@ -340,6 +352,7 @@ point:
 python scripts/dev.py doctor
 python scripts/dev.py backend
 python scripts/dev.py frontend
+python scripts/dev.py reset-demo
 python scripts/dev.py test
 python scripts/dev.py eval
 python scripts/dev.py verify
