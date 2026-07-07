@@ -91,6 +91,7 @@ def test_frontend_scripts_are_required(
                     "test": "vitest run",
                     "typecheck": "tsc -b",
                     "build": "tsc -b && vite build",
+                    "e2e": "playwright test",
                 },
             }
         ),
@@ -112,6 +113,7 @@ def test_frontend_manifest_must_declare_supported_node_range(
                     "test": "vitest run",
                     "typecheck": "tsc -b",
                     "build": "tsc -b && vite build",
+                    "e2e": "playwright test",
                 },
             }
         ),

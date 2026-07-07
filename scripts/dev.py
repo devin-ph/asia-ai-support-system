@@ -48,7 +48,7 @@ ENV_EXAMPLE = ROOT / ".env.example"
 
 SUPPORTED_NODE_RANGE = "^20.19.0 || ^22.12.0"
 DEFAULT_NODE_MAJOR = 22
-REQUIRED_FRONTEND_SCRIPTS = ("test", "typecheck", "build")
+REQUIRED_FRONTEND_SCRIPTS = ("test", "typecheck", "build", "e2e")
 
 _OBVIOUS_SECRET_RE = re.compile(
     r"""(?ix)

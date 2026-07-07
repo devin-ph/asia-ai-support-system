@@ -51,8 +51,14 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
 
+      - name: Install Playwright browsers
+        run: npx --prefix frontend playwright install --with-deps chromium
+
       - name: Check clean-clone readiness
         run: python scripts/dev.py doctor
 
       - name: Verify repository
         run: python scripts/dev.py verify --security
+
+      - name: Run browser E2E
+        run: npm run e2e --prefix frontend
