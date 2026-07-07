@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import subprocess
+from argparse import Namespace
 from pathlib import Path
 from types import ModuleType
 
@@ -149,6 +150,34 @@ def test_runtime_directory_must_be_writable(
     assert DEV._check_runtime_writable() is True
     assert runtime_dir.is_dir()
     assert tuple(runtime_dir.iterdir()) == ()
+
+
+def test_reset_demo_copies_ticket_seed_to_runtime(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    seed_path = tmp_path / "data" / "fixtures" / "demo_tickets.seed.json"
+    runtime_dir = tmp_path / "var"
+    runtime_path = runtime_dir / "demo_tickets.json"
+    seed_path.parent.mkdir(parents=True)
+    seed_path.write_text("[]\n", encoding="utf-8")
+    runtime_dir.mkdir()
+    runtime_path.write_text(
+        '[{"ticket_id": "tkt_old", "action_id": "act_old"}]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(DEV, "ROOT", tmp_path)
+    monkeypatch.setattr(DEV, "RUNTIME_DIR", runtime_dir)
+    monkeypatch.setattr(DEV, "RUNTIME_TICKETS", runtime_path)
+    monkeypatch.setattr(DEV, "TICKET_SEED", seed_path)
+
+    assert DEV.cmd_reset_demo(Namespace()) == 0
+
+    assert runtime_path.read_text(encoding="utf-8") == "[]\n"
+    assert seed_path.read_text(encoding="utf-8") == "[]\n"
+    output = capsys.readouterr().out
+    assert "Reset var/demo_tickets.json from data/fixtures/demo_tickets.seed.json" in output
 
 
 def test_empty_env_example_declares_no_required_configuration(

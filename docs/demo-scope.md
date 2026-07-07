@@ -195,6 +195,10 @@ The milestone is done when:
 - `python scripts/dev.py eval` reports the committed deterministic baseline for
   intent, policy retrieval, order extraction, and ticket confirmation.
 - `python scripts/dev.py verify` passes before a commit or pull request.
+- `python scripts/dev.py reset-demo` restores the ignored
+  `var/demo_tickets.json` runtime ticket store from
+  `data/fixtures/demo_tickets.seed.json` without mutating fixtures or eval
+  snapshots.
 - `python -m pip_audit -r backend/requirements.txt` reports no known Python
   dependency vulnerabilities.
 - OpenAPI starts locally with `python scripts/dev.py backend`.
@@ -229,6 +233,8 @@ automated verification:
   dependency set, and CI runs this security variant.
 - Runtime state remains ignored under `var/`; any mutation under the immutable
   `data/fixtures/` directory fails verification.
+- `reset-demo` restores the local ticket runtime store from the committed seed
+  fixture and does not reset the deterministic eval snapshot.
 - A successful verification may report PR/tag readiness only when the working
   tree is clean.
 
