@@ -54,15 +54,16 @@ gate. See [`README.md`](README.md) for detailed descriptions and
 * Use synthetic data only.
 * Treat files under `data/fixtures/` as immutable repository fixtures.
 * Write local runtime state only under the ignored `var/` directory.
-* Never add real customer data or real PII.
-* Never commit secrets or API keys.
+* Never add real customer data, real PII, secrets, or API keys.
 * Do not expose write actions directly to a model or chat handler.
 * Keep ticket write providers behind application state and the confirmation
   endpoint.
-* Ticket creation must require explicit user confirmation.
-* Repeated confirmation must not create duplicate tickets.
-* If policy evidence is missing, return an insufficient-context response instead of inventing an answer.
-* Order lookup must only return safe fields and must enforce the fixed demo customer ownership check.
+* Ticket creation must require explicit user confirmation and repeated
+  confirmation must not create duplicate tickets.
+* If policy evidence is missing, return an insufficient-context response instead
+  of inventing an answer.
+* Order lookup must only return safe fields and must enforce the fixed demo
+  customer ownership check.
 
 ## Non-Negotiable Invariants
 
@@ -80,75 +81,48 @@ instead of proceeding.
 
 ## Git Behavior
 
-Use a branch-first, review-first workflow that keeps `main` runnable and
-demo-ready. Follow `docs/dev-workflow.md` for branch prefixes, detailed Git
-commands, commit guidance, and merge procedures.
+Use a review-first workflow that keeps `main` runnable and demo-ready. Follow
+`docs/dev-workflow.md` for the detailed Git workflow.
 
-The agent may create or switch to an appropriate short-lived branch, make the
-requested changes, and run relevant checks. By default, the agent must not
-commit, push, or merge. Instead, it should leave the working tree ready for
-human review and suggest how the changes should be committed.
+The agent may inspect the repository, create or reuse a suitable branch, make
+changes, and run checks. By default, the agent must not commit, push, or merge.
+Leave the working tree ready for review unless the user explicitly asks for Git
+write actions.
 
-Every agent-authored change belongs on a short-lived branch. A trivial
-documentation edit may need only manual verification, but it is not an
-exception to branch protection or human review.
+Use a short-lived branch for non-trivial changes, especially code, tests,
+configuration, dependencies, CI, safety rules, product contract, or agent
+instruction changes. Small wording, formatting, or link-only documentation edits
+may stay on the current branch when the working tree is clean.
 
-Before making changes, the agent must:
+Before editing:
 
-* Inspect the current branch, local and remote branches, and working tree.
-* Reuse the current branch only when it clearly matches the task.
-* Create an appropriately prefixed short-lived branch before editing if the
-  current branch is `main` or unrelated to the task.
+* Check the current branch and working tree.
+* Reuse the current branch when it clearly matches the task.
+* Create a focused branch when working from `main`, when the task is non-trivial,
+  or when the current branch is unrelated.
 * Preserve unrelated local changes.
 
-Before handing work back, the agent must:
+Before returning work:
 
-* Run `python scripts/dev.py verify` for code, test, tooling, configuration,
-  contract, or behavior changes.
-* For a wording-, formatting-, or link-only documentation change, record a
-  short manual verification note instead.
+* Run the relevant check for the size of the change. Use
+  `python scripts/dev.py verify` for non-trivial code, test, tooling,
+  configuration, contract, or behavior changes.
+* For trivial documentation-only edits, a short manual verification note is
+  enough.
 * Report verification failures clearly and leave the change uncommitted.
-* Group changed files into logical commits and suggest Conventional Commit
-  messages.
+* Provide a natural review summary and, when useful, copyable commit commands.
 
-Prefer reviewable commit proposals over one large commit. Split commit
-proposals when the diff includes more than one clearly different change type,
-such as code behavior, tests, tooling/configuration, dependencies, CI, docs, or
-mechanical formatting.
+Commit proposals should favor clarity without over-splitting. One commit is fine
+for a cohesive change. Suggest multiple commits only when that would make review
+meaningfully easier, such as separating code behavior, tests, docs, CI/tooling,
+dependencies, or mechanical formatting.
 
-Use a single commit only when all changed files are tightly coupled to one
-logical unit. If proposing one commit for multiple change types, briefly explain
-why they should stay together.
-
-After completing work, the agent must provide a review summary followed by a commit proposal.
-
-The review summary should be natural language. Briefly explain what changed,
-why it changed, what to pay attention to, verification results, and any follow-up
-if relevant.
-
-**Commit proposal** should provide copyable shell commands for each suggested
-commit. Use explicit file paths instead of `git add .`.
+Use explicit paths in commit commands and avoid `git add .` unless the full diff
+has been reviewed:
 
 ```bash
 git add -- <file> <file>
 git commit -m "<type>(optional-scope): <short description>"
-```
-
-For multiple commits, provide one command block per commit:
-
-```bash
-git add -- <file> <file>
-git commit -m "<type>(optional-scope): <short description>"
-```
-```bash
-git add -- <file> <file>
-git commit -m "<type>(optional-scope): <short description>"
-```
-
-Then suggest the merge commit message:
-
-```bash
-git merge --no-ff <branch-name> -m "merge: <short summary>"
 ```
 
 Must not:
@@ -162,17 +136,17 @@ Must not:
 
 ## Definition of Done
 
-A change is ready for review only when:
+A change is ready for review when:
 
-* The vertical slice still runs locally.
-* Relevant tests pass or a manual verification note is added.
-* `python scripts/dev.py verify` passes before merging to `main`; for trivial
-  documentation changes, a short manual verification note is acceptable.
+* Relevant tests pass or a manual verification note is provided.
+* `python scripts/dev.py verify` passes before merging non-trivial changes to
+  `main`.
 * No non-negotiable invariant is violated.
-* API response shapes remain stable or docs are updated.
-* Product-contract changes update `docs/demo-scope.md` in the same change.
-* New behavior stays inside the v0.1 scope.
-* No secrets, real PII, generated build artifacts, or dependency folders are committed.
+* Product-contract or API shape changes update `docs/demo-scope.md` in the same
+  change.
+* New behavior stays inside the v0.1 scope unless explicitly requested.
+* No secrets, real PII, generated build artifacts, dependency folders, or
+  runtime state are committed.
 
 See [`docs/demo-scope.md`](docs/demo-scope.md) for the full milestone
 acceptance criteria and product-level definition of done.

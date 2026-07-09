@@ -1,155 +1,120 @@
 # Git Workflow Rules
 
-This project uses a lightweight branch-based workflow to keep `main` stable and demo-ready.
+This project uses a lightweight Git workflow to keep `main` stable and demo-ready
+without turning every change into ceremony.
 
-## Branch roles
+## Main rules
 
 * `main` must stay stable, runnable, and demo-ready.
 * Do not commit experimental or half-broken work directly to `main`.
-* Use a short-lived branch for every proposed change.
+* Keep changes inside the requested scope.
+* Do not commit secrets, real PII, generated build artifacts, dependency
+  folders, runtime state, or unrelated local changes.
 
-Use branch prefixes consistently:
+## Branching
 
-* `feat/...` for real product features.
+Use a short-lived branch for non-trivial work: code, tests, configuration,
+dependencies, CI, product contract, safety rules, agent instructions, or changes
+that may need review before reaching `main`.
+
+Small wording, formatting, or link-only documentation edits may stay on the
+current branch when the working tree is clean. A documentation-only edit is
+trivial only if it does not change agent instructions, the product contract,
+safety rules, runnable code, configuration, or dependencies.
+
+Prefer these branch prefixes:
+
+* `feat/...` for product features.
 * `fix/...` for bug fixes.
-* `docs/...` for README, AGENTS.md, walkthroughs, architecture notes, and other documentation.
-* `test/...` for adding or updating tests.
-* `chore/...` for tooling, scripts, config, maintenance, dependency/config cleanup.
-* `refactor/...` for code structure changes that should not alter behavior.
-* `ci/...` for CI/CD workflow changes.
+* `test/...` for tests.
+* `chore/...` for tooling, scripts, config, maintenance, or dependencies.
+* `refactor/...` for structure changes without intended behavior changes.
+* `ci/...` for CI/CD changes.
+* `docs/...` for documentation-only work that changes guidance, scope, ADRs,
+  README, or architecture notes.
 
-Examples:
-
-* `chore/v0.1.1-alignment`
-* `fix/runtime-ticket-storage`
-* `docs/clarify-demo-scope`
-* `test/frontend-confirmation-flow`
-* `ci/github-actions-verify`
-* `refactor/provider-boundaries`
-* `feat/rag-provider`
-
-## Branch workflow
-
-Inspect the repository before switching branches or editing files:
+Before editing, check the repository state:
 
 ```bash
 git status
 git branch --show-current
-git branch --list
-git branch -r
 ```
 
-Continue on the current branch only when it clearly matches the task. Otherwise,
-start from an up-to-date `main` and create a focused branch:
+Reuse the current branch when it clearly matches the task. Otherwise, start from
+an up-to-date `main` and create a focused branch:
 
 ```bash
 git checkout main
 git pull --ff-only origin main
-git checkout -b chore/v0.1.1-alignment
+git checkout -b <type>/<short-slug>
 ```
 
 Do not switch branches or pull while unrelated local changes are present.
 
-Every agent-authored change uses a short-lived branch. In this workflow,
-“trivial” means a wording, formatting, or link correction that does not change
-runnable code, configuration, dependencies, agent instructions, the product or
-API contract, or a safety rule. Trivial changes may use manual verification,
-but they do not bypass branch protection or human review.
+If a tool creates a vendor-prefixed branch such as `codex/...`, it is not fatal.
+Rename it before merge when a clean project branch name is useful.
 
-## Commit message rules (Conventional Commits)
+## Commits
 
-All commits should follow the Conventional Commits format:
+Use Conventional Commits:
 
+```text
 <type>(optional-scope): <short description>
-
-Common types:
-
-* `feat`: new feature
-* `fix`: bug fix
-* `docs`: documentation changes
-* `test`: adding or updating tests
-* `chore`: tooling, scripts, config, maintenance
-* `refactor`: code changes without behavior change
-* `ci`: CI/CD related changes
-
-Examples:
-
-```bash
-git commit -m "feat(rag): add provider abstraction"
-git commit -m "fix(runtime): persist ticket storage correctly"
-git commit -m "docs(frontend): add AGENTS.md for UI rules"
-git commit -m "test(frontend): cover confirmation flow"
-git commit -m "chore(verify): add unified verification command"
 ```
 
-## Commit planning
+Common types: `feat`, `fix`, `docs`, `test`, `chore`, `refactor`, `ci`, `style`.
 
-When the agent finishes a task, it should propose commit groups instead of
-committing automatically.
+Optimize commits for review, but do not over-split:
 
-Commit proposals should be actionable. Prefer copyable shell commands with
-explicit paths:
+* Use one commit for a cohesive change.
+* Split commits only when it meaningfully improves review, such as separating
+  code behavior, tests, docs, CI/tooling, dependencies, or mechanical formatting.
+* Most small tasks need one commit. Most medium tasks need one to three commits.
+
+Use explicit paths in commit proposals:
 
 ```bash
 git add -- <file> <file>
 git commit -m "<type>(optional-scope): <short description>"
 ```
 
-If a file mixes logical changes with mechanical formatting, suggest
-interactive staging instead:
+Avoid `git add .` unless the full diff has been reviewed. Use `git add -p` when
+one file contains unrelated logical changes.
+
+## Checks
+
+Use the smallest useful check while developing:
 
 ```bash
-git add -p <file>
+python scripts/dev.py test
 ```
 
-When proposing commits, optimize for code review.
+Use the full gate before merging non-trivial changes to `main`:
 
-Use one commit when the changes are part of one tightly coupled logical unit.
-Prefer multiple commits when the diff spans clearly different change types
+```bash
+python scripts/dev.py verify
+```
 
-Do not split commits only by file location if the files must change together.
-Do not combine unrelated change types just because they were completed in the
-same branch.
+Trivial documentation-only edits may use a short manual verification note.
+If verification fails, report the failure and leave the change uncommitted.
 
-When introducing a formatter or linter, prefer separate commits for tool
-configuration, mechanical formatting changes, and documentation updates.
+## Integration
 
-See the root `AGENTS.md` for review summary and commit proposal guidance.
+Use the simplest integration strategy that fits the change:
+
+* Fast-forward or squash small/simple branches when a compact history is better.
+* Use squash when the branch has noisy WIP commits that do not add review value.
+* Use a normal merge commit only when preserving branch context is useful.
+* When using a merge commit, prefer `merge: <short summary>`.
+* Do not merge into `main` until the change has been reviewed and relevant checks
+  have passed.
 
 ## Assisted workflows
 
-For assisted workflows, keep the workflow simple: make changes on a short-lived
-branch, run relevant checks, then stop before committing. The agent should
-suggest commit grouping and messages, but the human decides when to commit,
-push, and merge.
+By default, assisted work should inspect the repo, make the requested change, run
+relevant checks, then stop before committing, pushing, or merging unless
+explicitly asked.
 
-Recommended work sequence:
-
-```bash
-git status
-git branch --show-current
-python scripts/dev.py verify
-git diff --name-only
-git diff --stat
-```
-
-Use `python scripts/dev.py test` for the fast development loop. Use `verify` for
-the final readiness check; it includes tests, deterministic baseline drift,
-frontend typecheck and build, repository hygiene, credential-pattern scanning,
-and diff checks.
-
-Rules:
-
-* Work on a short-lived branch, not directly on `main`.
-* Keep changes inside the requested scope.
-* Do not commit, push, or merge unless the user explicitly asks.
-* Do not use `git add .` unless the diff has been reviewed and every changed
-  file is intentional.
-* Do not include secrets, real PII, generated build artifacts, dependency
-  folders, runtime state, or unrelated local changes.
-* If verification fails, report the failure and leave the change uncommitted.
-* A trivial documentation change, as defined above, may use a short manual
-  verification note instead of the full verification command.
-
-Final response should include a natural review summary followed by a lightweight
-commit proposal as described in the root `AGENTS.md`.
+Final responses should be helpful first and structured second: provide a natural
+review summary and, when useful, copyable commit commands. Do not force a large
+template when a concise note is enough.
