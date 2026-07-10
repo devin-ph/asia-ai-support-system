@@ -2,10 +2,11 @@
 
 **AI Support & Insight Analytics System**
 
-A.S.I.A is a local Vietnamese e-commerce support demo. The current milestone,
-**v0.1: Runnable Vertical Slice**, proves the product contract end to end with a
-FastAPI backend, a minimal React interface, deterministic rules, and synthetic
-data.
+A.S.I.A is a local Vietnamese e-commerce support demo. The implemented demo,
+**v0.1.1: Reproducibility Hardening**, proves the product contract end to end
+with a FastAPI backend, a minimal React interface, deterministic rules, and
+synthetic data. The next locked scope is **v0.2: RAG and Grounded AI**, defined
+in [`docs/demo-scope.md`](docs/demo-scope.md).
 
 The demo deliberately uses no hosted model, vector database, production
 database, or real customer data. Its purpose is to validate safe behavior and
@@ -231,7 +232,10 @@ python scripts/dev.py eval
 reports intent accuracy, policy-section hit rate, insufficient-context
 precision, order-ID extraction accuracy, and confirmation-guardrail pass rate.
 Known misses remain visible; this is a benchmark, not a test that is expected
-to score 100%.
+to score 100%. The original deterministic scores remain frozen in
+[`eval/baseline.v0.1.json`](eval/baseline.v0.1.json); v0.2 target metrics are
+locked separately in
+[`eval/baseline.v0.2.target.json`](eval/baseline.v0.2.target.json).
 
 `verify` runs Ruff lint and format checks for `backend/` and `scripts/`, backend
 and frontend unit/component tests, checks the committed evaluation snapshot for drift, runs
@@ -338,10 +342,10 @@ milestone and discourage accidental scope expansion.
 ### `docs/demo-scope.md`: executable product contract
 
 [`docs/demo-scope.md`](docs/demo-scope.md) describes the four required flows,
-acceptance criteria, stable response shape, technical boundaries, and safety
-invariants. It is read before implementation and reviewed alongside tests, so
-the demo scope acts as the product-level contract rather than an informal
-wish list.
+acceptance criteria, stable response shape, technical boundaries, safety
+invariants, and the locked v0.2 in-scope/out-of-scope boundaries. It is read
+before implementation and reviewed alongside tests, so the demo scope acts as
+the product-level contract rather than an informal wish list.
 
 ### `scripts/dev.py`: repeatable development loop
 
@@ -396,10 +400,11 @@ current local services against the same ground truth and records the v0.1
 scores in `eval/baseline.v0.1.json`.
 
 The baseline deliberately includes natural paraphrases that keyword rules do
-not yet handle. A future LLM or retrieval provider should be evaluated on these
-same cases and must improve useful metrics without reducing the 100%
-confirmation-guardrail result. Dataset changes and implementation changes
-should be reviewed separately where practical to avoid moving the goalposts.
+not yet handle. v0.2 keeps that baseline as the original reference and adds
+`eval/baseline.v0.2.target.json` for pre-implementation targets covering RAG
+retrieval, grounded response generation, optional LLM analysis, provider config,
+and safety regression. Dataset changes and implementation changes should be
+reviewed separately where practical to avoid moving the goalposts.
 
 ### Synthetic data: safe fixtures by construction
 
@@ -465,20 +470,17 @@ Records (ADRs) that capture key technical choices and their rationale:
 
 ## Next roadmap
 
-The next milestone should preserve the v0.1 contracts and guardrails while
-replacing local stand-ins incrementally:
+The locked v0.2 milestone preserves the v0.1 contracts and guardrails while
+focusing only on:
 
-1. Implement an optional candidate provider behind the existing boundaries and
-   run it against the committed deterministic baseline and shared contracts.
-2. Expand policy fixtures and Vietnamese evaluation coverage without replacing
-   known hard cases merely to improve scores.
-3. Add real authentication and tenant isolation before connecting any commerce
-   data.
-4. Move durable actions, tickets, idempotency records, and audit events to
-   production-grade storage.
-5. Evaluate an optional LLM behind grounded retrieval, structured outputs, and
-   regression tests—without granting it direct write authority.
-6. Add production observability, deployment configuration, accessibility
-   review, and operational security controls.
+1. RAG policy retrieval.
+2. Grounded AI response generation.
+3. Optional LLM analyzer.
+4. Expanded eval.
+5. Provider config.
+6. Safety regression.
 
-These items are roadmap candidates only and remain outside the v0.1 demo scope.
+v0.2 explicitly does not include authentication, deployment, multi-tenant
+behavior, production storage, real commerce integrations, real customer data,
+or any model-controlled write path. Those remain future candidates after the
+RAG and grounded-AI slice proves it can preserve the existing safety contract.
