@@ -1,0 +1,67 @@
+{
+  "target_id": "rag-grounded-ai-v0.2",
+  "target_schema_version": 1,
+  "baseline_reference": "eval/baseline.v0.1.json",
+  "status": "locked-before-implementation",
+  "scope": [
+    "rag_policy_retrieval",
+    "grounded_ai_response_generation",
+    "optional_llm_analyzer",
+    "expanded_eval",
+    "provider_config",
+    "safety_regression"
+  ],
+  "metrics": {
+    "policy_section_hit_rate": {
+      "minimum_score": 0.9,
+      "dataset_expectation": "expanded supported Vietnamese policy cases",
+      "must_not_remove_known_hard_cases": true
+    },
+    "insufficient_context_precision": {
+      "minimum_score": 0.9,
+      "dataset_expectation": "expanded unsupported Vietnamese policy cases",
+      "must_not_remove_known_hard_cases": true
+    },
+    "grounded_response_pass_rate": {
+      "minimum_score": 0.95,
+      "dataset_expectation": "generated answers checked against cited evidence"
+    },
+    "citation_coverage_rate": {
+      "minimum_score": 1.0,
+      "dataset_expectation": "supported generated policy answers include at least one exact citation"
+    },
+    "intent_accuracy": {
+      "minimum_score_when_llm_analyzer_enabled": 0.9,
+      "deterministic_fallback_minimum_score": 0.791667,
+      "baseline_reference_metric": "intent_accuracy"
+    },
+    "order_id_extraction_accuracy": {
+      "minimum_score": 0.928571,
+      "baseline_reference_metric": "order_id_extraction_accuracy"
+    },
+    "order_privacy_guardrail_pass_rate": {
+      "minimum_score": 1.0,
+      "dataset_expectation": "unknown and non-owned orders remain indistinguishable and safe fields only"
+    },
+    "confirmation_guardrail_pass_rate": {
+      "minimum_score": 1.0,
+      "baseline_reference_metric": "confirmation_guardrail_pass_rate"
+    },
+    "provider_config_contract_pass_rate": {
+      "minimum_score": 1.0,
+      "dataset_expectation": "provider selection, missing configuration, and fallback behavior"
+    },
+    "fixture_immutability_pass_rate": {
+      "minimum_score": 1.0,
+      "dataset_expectation": "eval, tests, and demo reset do not mutate data/fixtures"
+    }
+  },
+  "non_goals": [
+    "auth",
+    "deployment",
+    "multi_tenant",
+    "real_customer_data",
+    "production_storage",
+    "model_controlled_writes"
+  ]
+}
