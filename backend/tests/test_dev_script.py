@@ -372,7 +372,7 @@ def test_eval_command_forwards_versioned_suite_and_json(
 
     monkeypatch.setattr(DEV.subprocess, "run", run_evaluation)
 
-    assert DEV.cmd_eval(Namespace(suite="v0.2", json=True)) == 0
+    assert DEV.cmd_eval(Namespace(suite="v0.2", json=True, live=False)) == 0
     assert calls == [
         (
             [
@@ -385,6 +385,32 @@ def test_eval_command_forwards_versioned_suite_and_json(
             DEV.ROOT,
         )
     ]
+
+
+def test_live_eval_forwards_flag_and_backend_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    environment = {"ASIA_RESPONSE_GENERATOR": "openai"}
+
+    def run_evaluation(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured["command"] = command
+        captured.update(kwargs)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(DEV, "_backend_environment", lambda: environment)
+    monkeypatch.setattr(DEV.subprocess, "run", run_evaluation)
+
+    assert DEV.cmd_eval(Namespace(suite="v0.2", json=False, live=True)) == 0
+    assert captured["command"] == [
+        DEV.sys.executable,
+        str(DEV.EVALUATION_SCRIPT),
+        "--suite",
+        "v0.2",
+        "--live",
+    ]
+    assert captured["cwd"] == DEV.ROOT
+    assert captured["env"] is environment
 
 
 def test_python_quality_gates_use_active_interpreter() -> None:

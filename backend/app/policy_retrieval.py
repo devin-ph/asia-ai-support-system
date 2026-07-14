@@ -23,14 +23,19 @@ ALLOWED_POLICY_SOURCES = frozenset(
 
 DEFAULT_TOP_K = 2
 MIN_RETRIEVAL_SCORE = 0.24
+MIN_MATCHED_QUERY_TOKENS = 2
 
-LEXICAL_WEIGHT = 0.68
+LEXICAL_WEIGHT = 0.66
 NGRAM_WEIGHT = 0.17
 HEADING_WEIGHT = 0.10
-EXACT_PHRASE_WEIGHT = 0.05
+EXACT_PHRASE_WEIGHT = 0.07
 
 _TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 _SLUG_SEPARATOR_PATTERN = re.compile(r"[^a-z0-9]+")
+_TOKEN_ALIASES = {
+    "cuoc": "phi",
+    "han": "gian",
+}
 _STOP_WORDS = frozenset(
     {
         "ai",
@@ -270,6 +275,12 @@ class LocalPolicyRetriever:
         if not ranked or ranked[0].score < self.min_score:
             return RetrievalResult(evidence=(), sufficient=False)
 
+        query_tokens = frozenset(_tokenize(query))
+        top_evidence_id = ranked[0].evidence.evidence_id
+        matched_tokens = query_tokens & self._document_tokens[top_evidence_id]
+        if len(matched_tokens) < MIN_MATCHED_QUERY_TOKENS:
+            return RetrievalResult(evidence=(), sufficient=False)
+
         selected = tuple(
             candidate.evidence
             for candidate in ranked[: self.top_k]
@@ -371,7 +382,7 @@ def _slugify(value: str) -> str:
 def _tokenize(value: str) -> tuple[str, ...]:
     normalized = normalize_vietnamese(value)
     return tuple(
-        token
+        _TOKEN_ALIASES.get(token, token)
         for token in _TOKEN_PATTERN.findall(normalized)
         if (len(token) > 1 or token.isdigit()) and token not in _STOP_WORDS
     )
@@ -431,6 +442,7 @@ __all__ = [
     "HEADING_WEIGHT",
     "LEXICAL_WEIGHT",
     "LocalPolicyRetriever",
+    "MIN_MATCHED_QUERY_TOKENS",
     "MIN_RETRIEVAL_SCORE",
     "NGRAM_WEIGHT",
     "PolicyCorpusError",

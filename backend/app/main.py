@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -53,7 +55,7 @@ async def health() -> HealthResponse:
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest, request: Request) -> ChatResponse:
-    """Handle one deterministic customer-support message."""
+    """Handle one customer-support message within reviewed provider boundaries."""
     state = _state(request)
     providers = _chat_providers(request)
     analysis = providers.analyzer.analyze(req.message)
@@ -70,7 +72,10 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
         IntentLabel.WARRANTY,
     }:
         state.record_tool("policy_search")
-        policy_result = providers.policy.search(req.message)
+        policy_result = await providers.policy.answer(
+            req.message,
+            request_id=uuid.uuid4().hex,
+        )
         assistant_message = policy_result.answer
         citations = list(policy_result.citations)
         tool_events.append(
@@ -172,12 +177,11 @@ def create_app(
         docs_url="/docs",
         redoc_url="/redoc",
     )
+    runtime = response_runtime or build_response_runtime(validated_settings)
     application.state.demo_state = state or DemoState()
-    application.state.chat_providers = chat_providers or default_chat_providers()
+    application.state.chat_providers = chat_providers or default_chat_providers(runtime)
     application.state.settings = validated_settings
-    application.state.response_runtime = response_runtime or build_response_runtime(
-        validated_settings
-    )
+    application.state.response_runtime = runtime
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[

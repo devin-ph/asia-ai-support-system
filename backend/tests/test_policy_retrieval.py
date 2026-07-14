@@ -10,6 +10,7 @@ import pytest
 from app.policy_retrieval import (
     ALLOWED_POLICY_SOURCES,
     DEFAULT_TOP_K,
+    MIN_MATCHED_QUERY_TOKENS,
     MIN_RETRIEVAL_SCORE,
     LocalPolicyRetriever,
     PolicyCorpusError,
@@ -189,10 +190,18 @@ def test_default_retrieval_parameters_are_explicit_and_bounded() -> None:
 
     assert retriever.top_k == DEFAULT_TOP_K == 2
     assert retriever.min_score == MIN_RETRIEVAL_SCORE == 0.24
+    assert MIN_MATCHED_QUERY_TOKENS == 2
     with pytest.raises(ValueError, match="top_k"):
         LocalPolicyRetriever(top_k=0)
     with pytest.raises(ValueError, match="min_score"):
         LocalPolicyRetriever(min_score=math.inf)
+
+
+def test_one_generic_policy_token_is_not_sufficient_evidence() -> None:
+    result = LocalPolicyRetriever().retrieve("Có chính sách giao nhanh không?")
+
+    assert result.sufficient is False
+    assert result.evidence == ()
 
 
 def test_retrieval_is_deterministic_without_network(

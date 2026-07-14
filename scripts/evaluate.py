@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import hashlib
 import json
+import re
 import sys
 import tempfile
+import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -18,21 +23,41 @@ EVAL_DIR = ROOT / "eval"
 DEFAULT_BASELINE = EVAL_DIR / "baseline.v0.1.json"
 V02_TARGET = EVAL_DIR / "baseline.v0.2.target.json"
 V02_MANIFEST = EVAL_DIR / "v0.2" / "manifest.json"
+_NUMBER_PATTERN = re.compile(r"(?<!\w)\d+(?:[.,]\d+)?(?!\w)")
+_EVAL_SEPARATOR_PATTERN = re.compile(r"[^a-z0-9]+")
 
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from app.config import (  # noqa: E402
+    ProviderConfigurationError,
+    ResponseGeneratorName,
+    load_settings,
+)
+from app.intent import normalize_vietnamese  # noqa: E402
 from app.order_service import extract_order_reference  # noqa: E402
 from app.policy_retrieval import (  # noqa: E402
     DEFAULT_TOP_K,
     EXACT_PHRASE_WEIGHT,
     HEADING_WEIGHT,
     LEXICAL_WEIGHT,
+    MIN_MATCHED_QUERY_TOKENS,
     MIN_RETRIEVAL_SCORE,
     NGRAM_WEIGHT,
     LocalPolicyRetriever,
 )
-from app.providers import default_chat_providers  # noqa: E402
+from app.policy_search import search_policy  # noqa: E402
+from app.providers import (  # noqa: E402
+    DeterministicAnalyzerProvider,
+    GroundedResponseRuntime,
+    TemplateResponseGenerator,
+)
+from app.providers.factory import build_response_runtime  # noqa: E402
+from app.providers.policy import (  # noqa: E402
+    GroundedPolicyProvider,
+    PolicyProvider,
+    build_citations_from,
+)
 from app.providers.tickets import LocalTicketProvider  # noqa: E402
 from app.storage import load_tickets  # noqa: E402
 
@@ -435,7 +460,7 @@ def validate_v02_target_contract(
 
 def evaluate_v02_routing(cases: tuple[dict[str, Any], ...]) -> MetricResult:
     """Confirm frozen mixed-intent labels match the existing routing authority."""
-    analyzer = default_chat_providers().analyzer
+    analyzer = DeterministicAnalyzerProvider()
     failures: list[str] = []
     for case in cases:
         actual = analyzer.analyze(_required_string(case, "text")).intent.value
@@ -533,8 +558,152 @@ def _metric_report(result: MetricResult) -> dict[str, Any]:
     return {**result.snapshot(), "failures": list(result.failures)}
 
 
+async def _evaluate_v02_generation(
+    cases: tuple[dict[str, Any], ...],
+    *,
+    provider: PolicyProvider | None = None,
+    include_answer_text: bool = False,
+) -> tuple[dict[str, MetricResult], tuple[dict[str, Any], ...]]:
+    """Evaluate grounded answer text and application-owned citation provenance."""
+    policy = provider or GroundedPolicyProvider(
+        GroundedResponseRuntime(TemplateResponseGenerator())
+    )
+    retriever = LocalPolicyRetriever()
+    grounded_failures: list[str] = []
+    coverage_failures: list[str] = []
+    validity_failures: list[str] = []
+    grounded_passes = 0
+    coverage_passes = 0
+    valid_citations = 0
+    returned_citations = 0
+    case_outcomes: list[dict[str, Any]] = []
+
+    for case in cases:
+        case_id = _required_string(case, "id")
+        query = _required_string(case, "query")
+        retrieval = retriever.retrieve(query)
+        expected_evidence = retrieval.evidence[:1] if retrieval.sufficient else ()
+        result = await policy.answer(query, request_id=f"eval-{case_id}")
+        normalized_answer = _normalize_eval_text(result.answer)
+
+        missing_claims = [
+            _required_string(claim, "id")
+            for claim in case["required_claims"]
+            if not any(
+                _contains_required_claim(normalized_answer, option) for option in claim["any_of"]
+            )
+        ]
+        forbidden_matches = [
+            pattern
+            for pattern in case["forbidden_patterns"]
+            if _normalize_eval_text(pattern) in normalized_answer
+        ]
+        evidence_numbers = {
+            number
+            for item in expected_evidence
+            for number in _NUMBER_PATTERN.findall(_normalize_eval_text(item.text))
+        }
+        answer_numbers = set(_NUMBER_PATTERN.findall(normalized_answer))
+        unsupported_numbers = sorted(answer_numbers - evidence_numbers)
+
+        grounded = bool(expected_evidence) and not (
+            missing_claims or forbidden_matches or unsupported_numbers
+        )
+        if grounded:
+            grounded_passes += 1
+        else:
+            grounded_failures.append(
+                f"{case_id}: missing={missing_claims}, forbidden={forbidden_matches}, "
+                f"unsupported_numbers={unsupported_numbers}"
+            )
+
+        covered = bool(result.citations)
+        if covered:
+            coverage_passes += 1
+        else:
+            coverage_failures.append(f"{case_id}: generated answer has no citation")
+
+        expected_citations = {
+            (
+                citation.title,
+                citation.source,
+                citation.section,
+            )
+            for citation in build_citations_from(expected_evidence)
+        }
+        case_citations_valid = True
+        for citation in result.citations:
+            returned_citations += 1
+            actual = (citation.title, citation.source, citation.section)
+            if actual in expected_citations:
+                valid_citations += 1
+            else:
+                case_citations_valid = False
+                validity_failures.append(
+                    f"{case_id}: citation is not supplied evidence: {actual!r}"
+                )
+
+        outcome = {
+            "id": case_id,
+            "automated_pass": grounded,
+            "required_claims_pass": not missing_claims,
+            "forbidden_claims_pass": not forbidden_matches,
+            "numeric_claims_pass": not unsupported_numbers,
+            "citation_coverage_pass": covered,
+            "citation_validity_pass": case_citations_valid and covered,
+            "fallback_reason": result.generation_fallback_reason,
+        }
+        if include_answer_text:
+            outcome["answer_text"] = result.answer
+        case_outcomes.append(outcome)
+
+    return (
+        {
+            "automated_grounded_response_pass_rate": MetricResult(
+                grounded_passes,
+                len(cases),
+                tuple(grounded_failures),
+            ),
+            "citation_coverage_rate": MetricResult(
+                coverage_passes,
+                len(cases),
+                tuple(coverage_failures),
+            ),
+            "citation_validity_rate": MetricResult(
+                valid_citations,
+                returned_citations,
+                tuple(validity_failures),
+            ),
+        },
+        tuple(case_outcomes),
+    )
+
+
+def evaluate_v02_generation(
+    cases: tuple[dict[str, Any], ...],
+) -> tuple[dict[str, MetricResult], tuple[dict[str, Any], ...]]:
+    """Run the offline generation benchmark from synchronous tooling/tests."""
+    return asyncio.run(_evaluate_v02_generation(cases))
+
+
+def _normalize_eval_text(value: str) -> str:
+    normalized = normalize_vietnamese(value)
+    return " ".join(_EVAL_SEPARATOR_PATTERN.sub(" ", normalized).split())
+
+
+def _contains_required_claim(normalized_answer: str, option: str) -> bool:
+    normalized_option = _normalize_eval_text(option)
+    if normalized_option in normalized_answer:
+        return True
+
+    answer_tokens = iter(normalized_answer.split())
+    return all(
+        any(token == current for current in answer_tokens) for token in normalized_option.split()
+    )
+
+
 def build_v02_contract_report() -> dict[str, Any]:
-    """Validate the frozen contract and measure implemented retrieval behavior."""
+    """Validate the frozen contract and measure offline v0.2 behavior."""
     datasets = load_v02_datasets()
     validate_v02_target_contract(datasets)
     routing = evaluate_v02_routing(datasets["routing_safety"])
@@ -544,23 +713,38 @@ def build_v02_contract_report() -> dict[str, Any]:
             + "; ".join(routing.failures)
         )
     retrieval = evaluate_v02_retrieval(datasets["policy_retrieval"])
+    generation, generation_cases = evaluate_v02_generation(datasets["grounded_generation"])
+    measured_metrics = {**retrieval, **generation}
     for name in (
         "policy_section_hit_rate",
         "unsupported_query_precision",
         "unsupported_query_recall",
+        "citation_coverage_rate",
+        "citation_validity_rate",
     ):
-        result = retrieval[name]
+        result = measured_metrics[name]
         minimum = V02_LOCKED_MINIMUMS[name]
         if result.score < minimum:
             raise EvaluationDataError(
                 f"{name}={result.score:.6f} is below locked minimum {minimum:.6f}: "
                 + "; ".join(result.failures)
             )
+    automated_groundedness = generation["automated_grounded_response_pass_rate"]
+    groundedness_minimum = V02_LOCKED_MINIMUMS["grounded_response_pass_rate"]
+    if automated_groundedness.score < groundedness_minimum:
+        raise EvaluationDataError(
+            "automated_grounded_response_pass_rate="
+            f"{automated_groundedness.score:.6f} is below pre-review minimum "
+            f"{groundedness_minimum:.6f}: " + "; ".join(automated_groundedness.failures)
+        )
     return {
         "suite_id": "v0.2-evaluation-contract",
-        "evaluator_schema_version": 3,
-        "status": "retrieval_gate_passed",
-        "feature_metrics_status": "retrieval_measured_generation_pending",
+        "evaluator_schema_version": 4,
+        "status": "offline_generation_gate_passed",
+        "feature_metrics_status": (
+            "retrieval_and_offline_generation_measured_human_review_pending"
+        ),
+        "human_reference_review_status": "pending_external_reference_run",
         "dataset_hash": compute_v02_dataset_hash(),
         "policy_corpus_hash": compute_policy_corpus_hash(),
         "datasets": {
@@ -585,6 +769,7 @@ def build_v02_contract_report() -> dict[str, Any]:
             "strategy": "normalized_idf_lexical_plus_word_ngrams",
             "top_k": DEFAULT_TOP_K,
             "minimum_score": MIN_RETRIEVAL_SCORE,
+            "minimum_matched_query_tokens": MIN_MATCHED_QUERY_TOKENS,
             "weights": {
                 "lexical": LEXICAL_WEIGHT,
                 "word_ngram": NGRAM_WEIGHT,
@@ -594,12 +779,145 @@ def build_v02_contract_report() -> dict[str, Any]:
             "external_network": False,
             "external_embeddings": False,
         },
-        "feature_metrics": {name: _metric_report(result) for name, result in retrieval.items()},
+        "generation_config": {
+            "provider": "template",
+            "model": None,
+            "prompt_version": TemplateResponseGenerator.prompt_version,
+            "evidence_limit": 1,
+            "external_network": False,
+            "application_owned_citations": True,
+        },
+        "feature_metrics": {
+            name: _metric_report(result) for name, result in measured_metrics.items()
+        },
+        "pending_metrics": {
+            "grounded_response_pass_rate": {
+                "status": "pending_live_human_reference_review",
+                "minimum_score": groundedness_minimum,
+            }
+        },
+        "generation_cases": list(generation_cases),
     }
 
 
+def run_v02_live_generation() -> tuple[dict[str, Any], Path]:
+    """Run the explicitly selected external provider and write an ignored artifact."""
+    datasets = load_v02_datasets()
+    validate_v02_target_contract(datasets)
+    settings = load_settings()
+    if settings.response_generator is not ResponseGeneratorName.OPENAI:
+        raise ProviderConfigurationError(
+            "live v0.2 evaluation requires ASIA_RESPONSE_GENERATOR=openai"
+        )
+
+    runtime = build_response_runtime(settings)
+    provider = GroundedPolicyProvider(runtime)
+    started = time.perf_counter()
+    metrics, outcomes = asyncio.run(
+        _evaluate_v02_generation(
+            datasets["grounded_generation"],
+            provider=provider,
+            include_answer_text=True,
+        )
+    )
+    duration_ms = round((time.perf_counter() - started) * 1000, 3)
+    artifact = build_live_result_artifact(
+        provider=runtime.generator.provider_name,
+        model=runtime.generator.model,
+        prompt_version=runtime.generator.prompt_version,
+        timeout_seconds=settings.llm_timeout_seconds,
+        duration_ms=duration_ms,
+        metrics=metrics,
+        outcomes=outcomes,
+    )
+    output_path = _next_live_result_path()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(artifact, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return artifact, output_path
+
+
+def build_live_result_artifact(
+    *,
+    provider: str,
+    model: str | None,
+    prompt_version: str,
+    timeout_seconds: float,
+    duration_ms: float,
+    metrics: dict[str, MetricResult],
+    outcomes: tuple[dict[str, Any], ...],
+    generated_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Build live-result provenance without prompts or application data."""
+    fallback_counts = Counter(
+        outcome["fallback_reason"] for outcome in outcomes if outcome["fallback_reason"] is not None
+    )
+    automated_gate_passed = (
+        all(
+            (
+                (
+                    metrics["automated_grounded_response_pass_rate"].score
+                    >= V02_LOCKED_MINIMUMS["grounded_response_pass_rate"]
+                ),
+                (
+                    metrics["citation_coverage_rate"].score
+                    >= V02_LOCKED_MINIMUMS["citation_coverage_rate"]
+                ),
+                (
+                    metrics["citation_validity_rate"].score
+                    >= V02_LOCKED_MINIMUMS["citation_validity_rate"]
+                ),
+            )
+        )
+        and not fallback_counts
+    )
+    timestamp = generated_at or datetime.now(UTC)
+
+    return {
+        "schema_version": 1,
+        "artifact_type": "v0.2-grounded-generation-live-result",
+        "created_at": timestamp.astimezone(UTC).isoformat(),
+        "provider": provider,
+        "model": model,
+        "prompt_version": prompt_version,
+        "corpus_hash": compute_policy_corpus_hash(),
+        "dataset_hash": compute_v02_dataset_hash(),
+        "parameters": {
+            "timeout_seconds": timeout_seconds,
+            "case_count": len(outcomes),
+            "evidence_limit": 1,
+            "store": False,
+            "max_retries": 0,
+        },
+        "latency_summary": {
+            "total_ms": duration_ms,
+            "average_ms": round(duration_ms / len(outcomes), 3) if outcomes else 0.0,
+        },
+        "metrics": {name: _metric_report(result) for name, result in metrics.items()},
+        "fallbacks": {
+            "total": sum(fallback_counts.values()),
+            "by_reason": dict(sorted(fallback_counts.items())),
+        },
+        "automated_gate_passed": automated_gate_passed,
+        "human_review": {
+            "status": "pending",
+            "rubric": "0=unsafe-or-unsupported, 1=partial, 2=fully-grounded",
+            "reviewed_cases": 0,
+            "required_cases": len(outcomes),
+        },
+        "cases": [{**outcome, "human_score": None} for outcome in outcomes],
+    }
+
+
+def _next_live_result_path() -> Path:
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    return ROOT / "var" / "eval" / f"live-result-{timestamp}.json"
+
+
 def evaluate_intents(cases: tuple[dict[str, Any], ...]) -> MetricResult:
-    analyzer = default_chat_providers().analyzer
+    analyzer = DeterministicAnalyzerProvider()
     failures: list[str] = []
     for case in cases:
         predicted = analyzer.analyze(_required_string(case, "text")).intent.value
@@ -612,7 +930,6 @@ def evaluate_intents(cases: tuple[dict[str, Any], ...]) -> MetricResult:
 def evaluate_policies(
     cases: tuple[dict[str, Any], ...],
 ) -> tuple[MetricResult, MetricResult]:
-    policy = default_chat_providers().policy
     section_total = 0
     section_hits = 0
     section_failures: list[str] = []
@@ -621,7 +938,7 @@ def evaluate_policies(
     insufficient_failures: list[str] = []
 
     for case in cases:
-        result = policy.search(_required_string(case, "query"))
+        result = search_policy(_required_string(case, "query"))
         is_insufficient = not result.citations
         expects_insufficient = case.get("expected") == "insufficient_context"
 
@@ -822,14 +1139,37 @@ def _print_v02_contract_report(report: dict[str, Any]) -> None:
     print(
         "retrieval: "
         f"top_k={config['top_k']}, minimum_score={config['minimum_score']}, "
+        f"minimum_matches={config['minimum_matched_query_tokens']}, "
         f"strategy={config['strategy']}"
     )
     print("retrieval metrics:")
-    for name, metric in report["feature_metrics"].items():
+    for name in (
+        "policy_section_hit_rate",
+        "policy_top_1_hit_rate",
+        "unsupported_query_precision",
+        "unsupported_query_recall",
+    ):
+        metric = report["feature_metrics"][name]
         print(f"  - {name}: {metric['score']:.1%} ({metric['passed']}/{metric['total']})")
         for failure in metric["failures"]:
             print(f"      {failure}")
-    print("\nGrounded-generation metrics begin after route integration is implemented.")
+    generation = report["generation_config"]
+    print(
+        "generation: "
+        f"provider={generation['provider']}, prompt={generation['prompt_version']}, "
+        f"evidence_limit={generation['evidence_limit']}"
+    )
+    print("generation metrics:")
+    for name in (
+        "automated_grounded_response_pass_rate",
+        "citation_coverage_rate",
+        "citation_validity_rate",
+    ):
+        metric = report["feature_metrics"][name]
+        print(f"  - {name}: {metric['score']:.1%} ({metric['passed']}/{metric['total']})")
+        for failure in metric["failures"]:
+            print(f"      {failure}")
+    print(f"human reference review: {report['human_reference_review_status']}")
 
 
 def _check_baseline(snapshot: dict[str, Any], path: Path) -> bool:
@@ -873,6 +1213,11 @@ def main() -> int:
         help="Print the deterministic snapshot as JSON",
     )
     parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Run the explicitly configured external v0.2 generator and write var/eval output",
+    )
+    parser.add_argument(
         "--check-baseline",
         type=Path,
         metavar="PATH",
@@ -882,8 +1227,29 @@ def main() -> int:
 
     if args.suite == "v0.2" and args.check_baseline is not None:
         parser.error("--check-baseline applies only to the v0.1 measured baseline")
+    if args.live and args.suite != "v0.2":
+        parser.error("--live applies only to --suite v0.2")
 
     if args.suite == "v0.2":
+        if args.live:
+            try:
+                artifact, output_path = run_v02_live_generation()
+            except (EvaluationDataError, ProviderConfigurationError) as exc:
+                print(f"Live evaluation error: {exc}", file=sys.stderr)
+                return 2
+            if args.json:
+                print(json.dumps(artifact, ensure_ascii=False, indent=2))
+            else:
+                print("A.S.I.A v0.2 live grounded-generation result\n")
+                print(f"provider: {artifact['provider']}")
+                print(f"model: {artifact['model']}")
+                print(f"prompt version: {artifact['prompt_version']}")
+                print(f"fallbacks: {artifact['fallbacks']['total']}")
+                print(f"automated gate passed: {artifact['automated_gate_passed']}")
+                print(f"human review: {artifact['human_review']['status']}")
+                print(f"artifact: {output_path.relative_to(ROOT)}")
+            return 0 if artifact["automated_gate_passed"] else 1
+
         try:
             report = build_v02_contract_report()
         except EvaluationDataError as exc:

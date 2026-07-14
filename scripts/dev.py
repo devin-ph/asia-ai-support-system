@@ -764,10 +764,15 @@ def cmd_eval(args: argparse.Namespace) -> int:
     ]
     if args.json:
         command.append("--json")
+    if args.live:
+        command.append("--live")
+    run_options: dict[str, object] = {"cwd": ROOT}
+    if args.live:
+        run_options["env"] = _backend_environment()
     try:
         return subprocess.run(
             command,
-            cwd=ROOT,
+            **run_options,
         ).returncode
     except KeyboardInterrupt:
         print(_red(f"\n{_FAIL} Evaluation interrupted."))
@@ -1224,6 +1229,11 @@ def main() -> int:
         "--json",
         action="store_true",
         help="Print the selected suite report as JSON",
+    )
+    eval_parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Run the selected external v0.2 generator and write an ignored result artifact",
     )
     verify_parser = sub.add_parser("verify", help="Run full pre-commit verification")
     verify_parser.add_argument(

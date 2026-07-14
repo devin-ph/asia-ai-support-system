@@ -6,8 +6,11 @@ import importlib.util
 import json
 import sys
 from collections import Counter
+from datetime import UTC, datetime
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
+
+import pytest
 
 
 def _load_evaluation_module() -> ModuleType:
@@ -137,18 +140,134 @@ def test_v02_retrieval_meets_the_frozen_gate() -> None:
     }
 
     report = EVALUATION.build_v02_contract_report()
-    assert report["status"] == "retrieval_gate_passed"
-    assert report["feature_metrics_status"] == "retrieval_measured_generation_pending"
     assert report["retrieval_config"] == {
         "strategy": "normalized_idf_lexical_plus_word_ngrams",
         "top_k": 2,
         "minimum_score": 0.24,
+        "minimum_matched_query_tokens": 2,
         "weights": {
-            "lexical": 0.68,
+            "lexical": 0.66,
             "word_ngram": 0.17,
             "heading": 0.1,
-            "exact_phrase": 0.05,
+            "exact_phrase": 0.07,
         },
         "external_network": False,
         "external_embeddings": False,
     }
+
+
+def test_v02_offline_generation_meets_the_automated_frozen_gates() -> None:
+    datasets = EVALUATION.load_v02_datasets()
+    metrics, outcomes = EVALUATION.evaluate_v02_generation(datasets["grounded_generation"])
+
+    assert metrics["automated_grounded_response_pass_rate"].snapshot() == {
+        "score": 1.0,
+        "passed": 21,
+        "total": 21,
+    }
+    assert metrics["citation_coverage_rate"].snapshot() == {
+        "score": 1.0,
+        "passed": 21,
+        "total": 21,
+    }
+    assert metrics["citation_validity_rate"].snapshot() == {
+        "score": 1.0,
+        "passed": 21,
+        "total": 21,
+    }
+    assert len(outcomes) == 21
+    assert all(outcome["automated_pass"] for outcome in outcomes)
+
+    report = EVALUATION.build_v02_contract_report()
+    assert report["status"] == "offline_generation_gate_passed"
+    assert (
+        report["feature_metrics_status"]
+        == "retrieval_and_offline_generation_measured_human_review_pending"
+    )
+    assert report["human_reference_review_status"] == "pending_external_reference_run"
+    assert report["pending_metrics"] == {
+        "grounded_response_pass_rate": {
+            "status": "pending_live_human_reference_review",
+            "minimum_score": 0.95,
+        }
+    }
+    assert report["generation_config"] == {
+        "provider": "template",
+        "model": None,
+        "prompt_version": "grounded-policy-v2",
+        "evidence_limit": 1,
+        "external_network": False,
+        "application_owned_citations": True,
+    }
+
+
+def test_live_result_artifact_contains_provenance_without_raw_content() -> None:
+    datasets = EVALUATION.load_v02_datasets()
+    metrics, outcomes = EVALUATION.evaluate_v02_generation(datasets["grounded_generation"])
+    artifact = EVALUATION.build_live_result_artifact(
+        provider="openai",
+        model="test-model-snapshot",
+        prompt_version="grounded-policy-v2",
+        timeout_seconds=15.0,
+        duration_ms=2100.0,
+        metrics=metrics,
+        outcomes=outcomes,
+        generated_at=datetime(2026, 7, 15, 1, 2, 3, tzinfo=UTC),
+    )
+
+    assert artifact["schema_version"] == 1
+    assert artifact["provider"] == "openai"
+    assert artifact["model"] == "test-model-snapshot"
+    assert artifact["created_at"] == "2026-07-15T01:02:03+00:00"
+    assert artifact["parameters"] == {
+        "timeout_seconds": 15.0,
+        "case_count": 21,
+        "evidence_limit": 1,
+        "store": False,
+        "max_retries": 0,
+    }
+    assert artifact["latency_summary"] == {
+        "total_ms": 2100.0,
+        "average_ms": 100.0,
+    }
+    assert artifact["fallbacks"] == {"total": 0, "by_reason": {}}
+    assert artifact["automated_gate_passed"] is True
+    assert artifact["human_review"]["status"] == "pending"
+    assert len(artifact["cases"]) == 21
+    serialized = json.dumps(artifact, ensure_ascii=False)
+    assert "Tôi được đổi trả" not in serialized
+    assert "trong vòng 7 ngày" not in serialized
+    assert "raw_prompt" not in serialized
+    assert "raw_response" not in serialized
+
+    fallback_outcomes = ({**outcomes[0], "fallback_reason": "authentication"}, *outcomes[1:])
+    fallback_artifact = EVALUATION.build_live_result_artifact(
+        provider="openai",
+        model="test-model-snapshot",
+        prompt_version="grounded-policy-v2",
+        timeout_seconds=15.0,
+        duration_ms=2100.0,
+        metrics=metrics,
+        outcomes=fallback_outcomes,
+    )
+    assert fallback_artifact["fallbacks"] == {
+        "total": 1,
+        "by_reason": {"authentication": 1},
+    }
+    assert fallback_artifact["automated_gate_passed"] is False
+
+
+def test_live_run_requires_explicit_external_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        EVALUATION,
+        "load_settings",
+        lambda: SimpleNamespace(response_generator=EVALUATION.ResponseGeneratorName.TEMPLATE),
+    )
+
+    with pytest.raises(
+        EVALUATION.ProviderConfigurationError,
+        match="ASIA_RESPONSE_GENERATOR=openai",
+    ):
+        EVALUATION.run_v02_live_generation()

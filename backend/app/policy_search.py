@@ -33,6 +33,7 @@ class PolicySearchResult:
 
     answer: str
     citations: tuple[Citation, ...]
+    generation_fallback_reason: str | None = None
 
 
 _RULES = (

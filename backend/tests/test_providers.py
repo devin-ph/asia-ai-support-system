@@ -27,7 +27,6 @@ from app.providers import (
     ChatProviders,
     DeterministicAnalyzerProvider,
     FixtureOrdersProvider,
-    KeywordPolicyProvider,
     default_chat_providers,
 )
 from app.providers.analyzer import AnalyzerProvider
@@ -65,7 +64,13 @@ class FakeAnalyzerProvider:
 class FakePolicyProvider:
     """Return one synthetic grounded policy result."""
 
-    def search(self, query: str) -> PolicySearchResult:
+    async def answer(
+        self,
+        query: str,
+        *,
+        request_id: str,
+    ) -> PolicySearchResult:
+        assert request_id
         if "nấu ăn" in query:
             return PolicySearchResult(
                 answer=INSUFFICIENT_CONTEXT_ANSWER,
@@ -219,12 +224,19 @@ def test_analyzer_provider_contract(provider: AnalyzerProvider) -> None:
 
 @pytest.mark.parametrize(
     "provider",
-    [KeywordPolicyProvider(), FakePolicyProvider()],
+    [default_chat_providers().policy, FakePolicyProvider()],
     ids=["deterministic", "fake"],
 )
-def test_policy_provider_contract(provider: PolicyProvider) -> None:
-    grounded = provider.search("Tôi muốn đổi trả sản phẩm")
-    insufficient = provider.search("Shop có hướng dẫn nấu ăn không?")
+@pytest.mark.anyio
+async def test_policy_provider_contract(provider: PolicyProvider) -> None:
+    grounded = await provider.answer(
+        "Tôi muốn đổi trả sản phẩm",
+        request_id="req-grounded",
+    )
+    insufficient = await provider.answer(
+        "Shop có hướng dẫn nấu ăn không?",
+        request_id="req-insufficient",
+    )
 
     assert isinstance(grounded, PolicySearchResult)
     assert grounded.answer

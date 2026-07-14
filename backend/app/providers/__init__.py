@@ -10,6 +10,7 @@ from app.providers.analyzer import (
 )
 from app.providers.generation import (
     GroundedGenerationRequest,
+    GroundedGenerationResult,
     GroundedResponseGenerator,
     GroundedResponseRuntime,
     GroundingEvidence,
@@ -21,7 +22,10 @@ from app.providers.generation import (
     TemplateResponseGenerator,
 )
 from app.providers.orders import FixtureOrdersProvider, OrdersProvider
-from app.providers.policy import KeywordPolicyProvider, PolicyProvider
+from app.providers.policy import (
+    GroundedPolicyProvider,
+    PolicyProvider,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,11 +37,14 @@ class ChatProviders:
     orders: OrdersProvider
 
 
-def default_chat_providers() -> ChatProviders:
+def default_chat_providers(
+    response_runtime: GroundedResponseRuntime | None = None,
+) -> ChatProviders:
     """Build the deterministic read providers used by the local demo."""
+    runtime = response_runtime or GroundedResponseRuntime(TemplateResponseGenerator())
     return ChatProviders(
         analyzer=DeterministicAnalyzerProvider(),
-        policy=KeywordPolicyProvider(),
+        policy=GroundedPolicyProvider(runtime),
         orders=FixtureOrdersProvider(),
     )
 
@@ -48,10 +55,11 @@ __all__ = [
     "DeterministicAnalyzerProvider",
     "FixtureOrdersProvider",
     "GroundedGenerationRequest",
+    "GroundedGenerationResult",
+    "GroundedPolicyProvider",
     "GroundedResponseGenerator",
     "GroundedResponseRuntime",
     "GroundingEvidence",
-    "KeywordPolicyProvider",
     "OpenAIGroundedResponseGenerator",
     "OrdersProvider",
     "PolicyProvider",
