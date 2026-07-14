@@ -22,11 +22,11 @@ metrics are frozen before feature implementation.
 | Ticket support | Drafts a pending support action in chat | A separate explicit confirmation creates exactly one ticket per action |
 | Admin overview | Shows message, ticket, intent, sentiment, and tool counts | Exposes aggregate counters only, without message or customer content |
 
-The public demo currently uses deterministic providers so behavior is
-repeatable. v0.2 now has an offline-first runtime boundary plus measured local
-H2 evidence retrieval; public route integration and grounded generation follow
-behind the same contracts and guardrails. The optional LLM analyzer is deferred
-to v0.2.1.
+The public policy flow now uses measured local H2 retrieval, grounded template
+generation by default, and application-owned citations. Selecting the optional
+OpenAI generator changes answer prose only; retrieval, citations, routing, and
+all write guardrails remain application-controlled. The optional LLM analyzer
+is deferred to v0.2.1.
 
 ## Technology
 
@@ -100,9 +100,9 @@ ASIA_LLM_TIMEOUT_SECONDS=15
 
 `doctor` validates only the settings required by the selected generator,
 enforces a timeout greater than 0 and at most 120 seconds, and never prints the
-key. Process environment values take precedence over `.env`. Phase 1 constructs
-this runtime boundary but does not yet call it from the policy route; the public
-demo therefore remains deterministic and offline.
+key. Process environment values take precedence over `.env`. The policy route
+calls the selected generator only after sufficient local evidence exists;
+template mode remains fully deterministic and offline.
 
 Start the backend in one terminal:
 
@@ -131,7 +131,8 @@ Run project commands from the repository root.
 | `python scripts/dev.py reset-demo` | Restore ignored ticket state from the immutable synthetic seed |
 | `python scripts/dev.py test` | Run backend and frontend unit/component tests |
 | `python scripts/dev.py eval` | Measure the frozen deterministic v0.1 baseline |
-| `python scripts/dev.py eval --suite v0.2` | Validate the frozen v0.2 contract and enforce implemented retrieval gates |
+| `python scripts/dev.py eval --suite v0.2` | Run frozen v0.2 retrieval, groundedness, citation, and routing gates offline |
+| `python scripts/dev.py eval --suite v0.2 --live` | Explicitly run the configured external generator and write an ignored review artifact |
 | `python scripts/dev.py verify` | Run the full pre-commit verification gate |
 | `python scripts/dev.py verify --security` | Add a vulnerability audit of locked Python dependencies |
 
@@ -158,9 +159,10 @@ in `frontend/playwright.config.ts`.
 remain visible so future providers must demonstrate a real improvement instead
 of moving the goalposts. `eval/baseline.v0.2.target.json` records the v0.2
 targets before implementation. The v0.2 suite validates 86 versioned cases,
-exact policy provenance, routing precedence, cross-platform dataset hashes, and
-the measured local retrieval gates. Grounded-generation metrics remain pending
-until that capability exists.
+exact policy provenance, routing precedence, cross-platform dataset hashes,
+retrieval, automated groundedness, and application-owned citations. The final
+grounded-response metric remains pending until an external reference run is
+scored with the documented human rubric.
 
 Metric definitions, datasets, and baseline rules are documented in
 [`eval/README.md`](eval/README.md).
@@ -262,16 +264,16 @@ live under [`docs/decisions/`](docs/decisions/README.md).
 
 ## Current limitations
 
-- Intent and sentiment are deterministic and keyword-based. The public policy
-  flow still uses the v0.1 keyword search; the measured local H2 retriever is
-  not route-integrated yet.
+- Intent and sentiment remain deterministic and keyword-based. Grounded policy
+  generation is single-turn and uses only the top local evidence section.
 - The demo represents one fixed synthetic customer with no authentication or
   tenant isolation.
 - Conversations, pending actions, and aggregate counters are process-local.
 - Confirmed tickets use an ignored local JSON file, not production storage.
-- The optional OpenAI adapter is not yet connected to the public policy flow.
-  There is no vector database, PostgreSQL, queue, cache, Docker setup, cloud
-  deployment, or real commerce integration.
+- External generation requires an explicitly configured API key and network;
+  no curated external-model reference is committed until the live human review
+  is complete. There is no vector database, PostgreSQL, queue, cache, Docker
+  setup, cloud deployment, or real commerce integration.
 - The frontend targets a local demo API and is not a production support client.
 
 ## v0.2 direction
@@ -279,15 +281,15 @@ live under [`docs/decisions/`](docs/decisions/README.md).
 The v0.2 scope, metric definitions, policy corpus, and 86 evaluation cases are
 now frozen. [ADR-005](docs/decisions/005-openai-responses-for-grounded-generation.md)
 selects the OpenAI Responses API as the single optional external generator;
-its validated async runtime boundary is available while template generation
-remains the offline default.
+its async runtime is integrated while template generation remains the offline
+default.
 
-Local H2 evidence retrieval now passes its frozen gates without embeddings or
-network calls. The next implementation step is policy-only grounded generation
-with application-owned citations, followed by route integration and regression
-coverage. Release work will finish by exercising the existing safety
-invariants, deterministic mode, security checks, and four original E2E flows.
-These steps do not introduce new product flows or broaden model authority.
+Local H2 retrieval, grounded template generation, redaction, no-evidence
+no-call behavior, safe provider fallback, and application-owned citations now
+pass their offline gates. Remaining v0.2 release work is the genuine external
+reference run and human review, followed by security checks and the four
+original E2E flows. These steps do not introduce new product flows or broaden
+model authority.
 
 Authentication, deployment, multi-tenant behavior, production storage, vector
 infrastructure, external embeddings, real commerce data, model-controlled write

@@ -15,12 +15,13 @@ The backend preserves the deterministic API contract while implementing the
 - `app/schemas.py`: public request and response models.
 - `app/intent.py`: deterministic Vietnamese intent and sentiment analysis.
 - `app/order_service.py`: fixed-customer lookup and safe order response shaping.
-- `app/policy_search.py`: legacy keyword answers used by the current public
-  policy flow until grounded-generation integration.
+- `app/policy_search.py`: legacy keyword behavior retained only for the frozen
+  v0.1 baseline and the shared insufficient-context response.
 - `app/policy_retrieval.py`: allowlisted H2 corpus loading, stable evidence
   provenance, and deterministic local retrieval.
-- `app/providers/`: narrow analyzer, policy, order, ticket, and async response
-  generation contracts plus their reviewed adapters and factory.
+- `app/providers/`: narrow analyzer, grounded policy orchestration, order,
+  ticket, and async response-generation contracts plus reviewed adapters and
+  factory.
 - `app/state.py`: in-memory actions and counters plus ticket orchestration.
 - `app/storage.py`: validated JSON loading and atomic ticket writes.
 - `app/ticket_service.py`: pending actions and idempotent ticket confirmation.

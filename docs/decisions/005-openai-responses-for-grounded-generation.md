@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted; runtime authentication handling amended on 2026-07-15.
 
 ## Context
 
@@ -34,10 +34,13 @@ external generator.
   admin, and raw log data are excluded.
 - Calls use a short, explicit timeout, initially 15 seconds. SDK retries are
   disabled so one request cannot turn into an unbounded demo delay.
-- Authentication or permission rejection is surfaced as a sanitized service
-  error. Connection failure, timeout, rate limiting, server failure, empty
-  output, or malformed output falls back to the deterministic evidence
-  template. Request cancellation continues to propagate.
+- Missing credentials or model configuration fails before startup. Runtime
+  authentication or permission rejection, connection failure, timeout, rate
+  limiting, server failure, empty output, or malformed output falls back to the
+  deterministic evidence template with a sanitized reason. Request
+  cancellation continues to propagate.
+- Live artifacts record fallback counts by sanitized category. A run with any
+  fallback cannot be promoted as the curated external-model reference.
 - Prompt changes are versioned and evaluated with the frozen v0.2 contract.
   Committed artifacts record provenance, not secrets or raw request content.
 

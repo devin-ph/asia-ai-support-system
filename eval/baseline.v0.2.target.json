@@ -11,6 +11,10 @@
     {
       "date": "2026-07-14",
       "reason": "Add refusal recall, citation validity, versioned v0.2 datasets, policy-only generation, and defer the LLM analyzer without changing the v0.1 baseline."
+    },
+    {
+      "date": "2026-07-15",
+      "reason": "Clarify that runtime authentication rejection uses the evidence-only template fallback and disqualifies that live run from external-reference promotion; datasets and metric thresholds are unchanged."
     }
   ],
   "scope": [

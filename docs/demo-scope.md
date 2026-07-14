@@ -159,10 +159,12 @@ allowlist requires a separately reviewed scope amendment.
   addresses, and phone numbers; it is not represented as general PII detection.
 - Unknown providers, incompatible settings, and missing selected-provider
   configuration fail application startup.
-- Provider authentication rejection is surfaced as a service error rather than
-  disguised as successful AI mode.
-- Timeout, temporary unavailability, empty output, or malformed output falls
-  back to a deterministic template derived from retrieved evidence.
+- Authentication rejection, timeout, temporary unavailability, empty output,
+  or output that violates the grounded response contract at runtime falls back
+  to a deterministic template derived from retrieved evidence and records a
+  sanitized fallback reason.
+- A live run containing any provider fallback is not eligible to become the
+  curated model reference, even when the template answer passes content checks.
 - Request cancellation propagates. It is not converted into a fallback.
 - Missing or insufficient evidence returns the existing safe refusal and never
   calls a generator.

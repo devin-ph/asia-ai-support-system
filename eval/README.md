@@ -13,17 +13,22 @@ Run from the repository root:
 python scripts/dev.py eval
 python scripts/dev.py eval --suite v0.1
 
-# Validate the frozen v0.2 contract and measure the local retriever.
+# Validate the frozen v0.2 contract and run all offline feature gates.
 python scripts/dev.py eval --suite v0.2
+
+# Explicit paid/network run using the selected OpenAI configuration.
+python scripts/dev.py eval --suite v0.2 --live
 
 # Machine-readable reports.
 python scripts/dev.py eval --suite v0.1 --json
 python scripts/dev.py eval --suite v0.2 --json
 ```
 
-The v0.2 command validates the frozen datasets, target, provenance, and routing
-labels, then enforces the implemented retrieval gates. Grounded-generation
-metrics remain pending until that capability is integrated. The default eval
+The regular v0.2 command validates the frozen datasets, target, provenance, and
+routing labels, then measures retrieval, automated groundedness, citation
+coverage, and citation validity with the offline template generator. It never
+calls a network. `--live` is the only evaluation path that invokes the selected
+external generator and writes an ignored review artifact. The default eval
 command and `python scripts/dev.py verify` keep checking the exact v0.1
 snapshot; run the v0.2 command explicitly for its phase gate.
 
@@ -114,7 +119,8 @@ The Phase 2 retriever is deliberately small and offline:
 - stable evidence IDs use `<source>#<normalized-heading>`, with deterministic
   `-2`, `-3`, and later suffixes for duplicate headings;
 - Vietnamese text is lowercased and diacritic-normalized before IDF-weighted
-  token overlap, heading overlap, and word n-gram matching;
+  token overlap, heading overlap, and word n-gram matching; the small lexical
+  normalizer also maps `cước` to `phí` and `thời hạn` to `thời gian`;
 - ranking is deterministic, in memory, and independent of source load order;
 - it has no embedding model, vector database, persistent index, or network
   path.
@@ -122,15 +128,16 @@ The Phase 2 retriever is deliberately small and offline:
 The fixed score is:
 
 ```text
-0.68 * lexical + 0.17 * word_ngram + 0.10 * heading + 0.05 * exact_phrase
+0.66 * lexical + 0.17 * word_ngram + 0.10 * heading + 0.07 * exact_phrase
 ```
 
-`top_k` is `2` and the single sufficiency threshold is `0.24`. These parameters
-apply to every query; there are no topic- or case-specific thresholds. On the
-frozen dataset, the lowest supported top score is `0.248536` and the highest
-unsupported top score is `0.225525`, so `0.24` sits inside the observed gap.
-That calibration is evidence for this versioned set, not a claim of universal
-separation on arbitrary queries.
+`top_k` is `2`, the single score threshold is `0.24`, and the top candidate must
+match at least two normalized query tokens. These parameters apply to every
+query; there are no topic- or case-specific thresholds. On the frozen dataset,
+the lowest supported top score is `0.242438` and the highest unsupported top
+score is `0.218892`, so `0.24` sits inside the observed gap. That calibration is
+evidence for this versioned set, not a claim of universal separation on
+arbitrary queries.
 
 Current measured result:
 
@@ -141,10 +148,11 @@ Current measured result:
 | `unsupported_query_precision` | 15/15 (1.00) | >= 0.90 |
 | `unsupported_query_recall` | 15/15 (1.00) | = 1.00 |
 
-Top-1 is reported to make ranking quality visible; the release contract uses
-top-k section hit because two evidence units may be passed to grounded
-generation. The evaluator also emits case IDs, expected evidence, returned
-evidence IDs, and scores for any failure.
+Top-1 is reported to make ranking quality visible; the release retrieval
+contract still uses top-k section hit. Grounded generation receives only the
+top-1 sufficient evidence unit in v0.2 to keep answers and citations focused.
+The evaluator emits case IDs, expected evidence, returned evidence IDs, and
+scores for any failure.
 
 ### Grounded-generation cases
 
@@ -165,8 +173,13 @@ forbidden claims, and review tags:
 }
 ```
 
-Release evaluation uses deterministic required/forbidden checks plus a curated
-human rubric. It does not rely on an LLM judge as the sole release gate.
+Offline evaluation requires each curated claim's normalized tokens in order,
+rejects every forbidden/contradictory phrase, and rejects numbers absent from
+the supplied evidence. It also checks that every answer has an
+application-owned citation matching the top-1 evidence. The current template
+result is 21/21 for automated groundedness, citation coverage, and citation
+validity. This does not complete the final `grounded_response_pass_rate`, which
+also requires the live human review defined below.
 
 Human scores:
 
@@ -177,9 +190,12 @@ Human scores:
 | 2 | All material claims are supported, complete for the question, and non-contradictory |
 
 A live response passes only when automated checks pass and it receives a human
-score of 2. Grounded-generation work will define the reference-result schema and
-command before live artifacts are accepted; the current evaluator does not
-expose a placeholder `--live` mode.
+score of 2. `python scripts/dev.py eval --suite v0.2 --live` requires an
+explicitly configured OpenAI provider, makes one bounded attempt per case, and
+writes `var/eval/live-result-*.json`. Any auth, timeout, unavailable, or
+malformed-output fallback makes that run ineligible as the external-model
+reference even if the evidence template passes content checks. An LLM judge may
+be run separately, but never replaces the 0-2 human rubric.
 
 ### Routing cases
 
@@ -221,6 +237,12 @@ ticket request
 | `grounded_response_pass_rate` | live cases passing automated checks and human score 2 / all live generation cases | 0.95 |
 | `order_id_extraction_accuracy` | exact extraction matches / all frozen v0.1 order cases | 0.928571 |
 
+The offline report names its pre-review content metric
+`automated_grounded_response_pass_rate` and applies the same 0.95 threshold. It
+must not be relabeled as the final `grounded_response_pass_rate` until all live
+cases have human score 2 or the final pass-rate calculation is otherwise
+complete under the frozen rubric.
+
 Precision and recall are both required. Precision alone could look good while a
 provider answers unsupported questions; recall is therefore a hard safety gate
 on the frozen set. A 1.00 score means all cases in this versioned dataset passed,
@@ -228,12 +250,17 @@ not that the system is universally correct outside it.
 
 ## Result lifecycle
 
-Local live runs introduced with grounded generation will write ignored artifacts
-under `var/eval/`. A curated release reference may be committed under
-`eval/results/` only after review. It must include schema version, provider,
-model, prompt version, corpus hash, dataset hash, parameters, latency summary,
-and redacted case outcomes. It must not contain secrets, raw prompts with
-identifiers, chain-of-thought, order data, ticket data, or application logs.
+Local live runs write ignored artifacts under `var/eval/`. They contain the
+generated policy answer needed for human scoring, automated case outcomes,
+fallback categories, and provider/model/prompt/corpus/dataset/parameter/latency
+provenance. They never contain raw prompts, unredacted queries, secrets,
+chain-of-thought, order data, ticket data, admin state, or application logs.
+
+After a reviewer scores all 21 cases, a curated release reference may be
+committed as `eval/results/v0.2-reference.json`. The curated file must remove
+local `answer_text`, retain scores and provenance, have zero fallbacks, and meet
+the locked 0.95 final grounded-response gate. No reference file is committed
+before a genuine external run and human review exist.
 
 ## Change control
 
