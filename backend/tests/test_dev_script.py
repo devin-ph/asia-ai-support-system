@@ -307,6 +307,35 @@ def test_pip_consistency_uses_active_interpreter(
     assert DEV._check_pip_consistency() is True
 
 
+def test_eval_command_forwards_versioned_suite_and_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[list[str], Path]] = []
+
+    def run_evaluation(
+        command: list[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append((command, kwargs["cwd"]))
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(DEV.subprocess, "run", run_evaluation)
+
+    assert DEV.cmd_eval(Namespace(suite="v0.2", json=True)) == 0
+    assert calls == [
+        (
+            [
+                DEV.sys.executable,
+                str(DEV.EVALUATION_SCRIPT),
+                "--suite",
+                "v0.2",
+                "--json",
+            ],
+            DEV.ROOT,
+        )
+    ]
+
+
 def test_python_quality_gates_use_active_interpreter() -> None:
     assert DEV._python_quality_commands() == (
         (

@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 from types import ModuleType
 
@@ -57,3 +58,57 @@ def test_evaluation_exposes_the_five_documented_metrics() -> None:
     }
     assert all(result.total > 0 for result in results.values())
     assert all(0.0 <= result.score <= 1.0 for result in results.values())
+
+
+def test_v02_datasets_match_the_frozen_schema_counts_and_hashes() -> None:
+    datasets = EVALUATION.load_v02_datasets()
+    target = EVALUATION.validate_v02_target_contract(datasets)
+
+    assert {name: len(cases) for name, cases in datasets.items()} == {
+        "policy_retrieval": 50,
+        "grounded_generation": 21,
+        "routing_safety": 15,
+    }
+    all_ids = [case["id"] for cases in datasets.values() for case in cases]
+    assert len(all_ids) == len(set(all_ids)) == 86
+    assert target["dataset_contract"]["dataset_hash"] == EVALUATION.compute_v02_dataset_hash()
+    assert target["dataset_contract"]["v0.1_dataset_hash"] == EVALUATION.compute_dataset_hash(
+        EVALUATION.DATASET_PATHS
+    )
+    assert (
+        target["dataset_contract"]["policy_corpus_hash"] == EVALUATION.compute_policy_corpus_hash()
+    )
+
+
+def test_v02_retrieval_and_generation_cover_every_policy_section() -> None:
+    datasets = EVALUATION.load_v02_datasets()
+    catalog = EVALUATION.load_policy_catalog()
+    expected_sections = {
+        (source, section) for source, sections in catalog.items() for section in sections
+    }
+
+    retrieval_sections = Counter(
+        (case["expected_source"], case["expected_section"])
+        for case in datasets["policy_retrieval"]
+        if case["supported"]
+    )
+    generation_sections = Counter(
+        (case["expected_source"], case["expected_section"])
+        for case in datasets["grounded_generation"]
+    )
+
+    assert set(retrieval_sections) == expected_sections
+    assert set(generation_sections) == expected_sections
+    assert set(retrieval_sections.values()) == {5}
+    assert set(generation_sections.values()) == {3}
+    assert sum(not case["supported"] for case in datasets["policy_retrieval"]) == 15
+
+
+def test_v02_routing_contract_matches_the_deterministic_authority() -> None:
+    datasets = EVALUATION.load_v02_datasets()
+    result = EVALUATION.evaluate_v02_routing(datasets["routing_safety"])
+
+    assert result.snapshot() == {"score": 1.0, "passed": 15, "total": 15}
+    report = EVALUATION.build_v02_contract_report()
+    assert report["status"] == "ready_for_feature_implementation"
+    assert report["feature_metrics_status"] == "not_measured_in_phase_0"

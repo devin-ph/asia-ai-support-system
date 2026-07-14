@@ -711,11 +711,19 @@ def cmd_test(_args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
-def cmd_eval(_args: argparse.Namespace) -> int:
-    """Measure deterministic behavior against the versioned JSONL cases."""
+def cmd_eval(args: argparse.Namespace) -> int:
+    """Measure v0.1 behavior or validate the frozen v0.2 contract."""
+    command = [
+        sys.executable,
+        str(EVALUATION_SCRIPT),
+        "--suite",
+        args.suite,
+    ]
+    if args.json:
+        command.append("--json")
     try:
         return subprocess.run(
-            [sys.executable, str(EVALUATION_SCRIPT)],
+            command,
             cwd=ROOT,
         ).returncode
     except KeyboardInterrupt:
@@ -1162,7 +1170,18 @@ def main() -> int:
     sub.add_parser("frontend", help="Run frontend dev server (npm)")
     sub.add_parser("reset-demo", help="Reset ignored local demo runtime state")
     sub.add_parser("test", help="Run backend and frontend tests")
-    sub.add_parser("eval", help="Measure the deterministic baseline")
+    eval_parser = sub.add_parser("eval", help="Run a versioned evaluation suite")
+    eval_parser.add_argument(
+        "--suite",
+        choices=("v0.1", "v0.2"),
+        default="v0.1",
+        help="Suite to run (default: v0.1)",
+    )
+    eval_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the selected suite report as JSON",
+    )
     verify_parser = sub.add_parser("verify", help="Run full pre-commit verification")
     verify_parser.add_argument(
         "--security",
