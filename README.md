@@ -3,9 +3,10 @@
 **AI Support & Insight Analytics System**
 
 A.S.I.A is a local Vietnamese e-commerce support demo built with FastAPI and
-React. The implemented milestone, **v0.1.1: Reproducibility Hardening**, proves
-four customer-support flows with deterministic behavior and synthetic data.
-The next locked milestone is **v0.2: RAG and Grounded AI**.
+React. v0.1.1 proves four customer-support flows with deterministic behavior
+and synthetic data. The current development milestone is **v0.2.0:
+Evidence-Grounded Policy Assistant**; its scope, evaluation contract, and target
+metrics are frozen before feature implementation.
 
 > **Demo-ready is not production-ready.** The repository has no authentication,
 > tenant isolation, production database, cloud deployment, or real customer
@@ -22,8 +23,9 @@ The next locked milestone is **v0.2: RAG and Grounded AI**.
 | Admin overview | Shows message, ticket, intent, sentiment, and tool counts | Exposes aggregate counters only, without message or customer content |
 
 The current implementation uses deterministic providers so behavior is
-repeatable. v0.2 will introduce RAG retrieval, grounded generation, and an
-optional LLM analyzer behind the same contracts and guardrails.
+repeatable. v0.2 adds local policy retrieval and optional grounded generation
+behind the same contracts and guardrails. The optional LLM analyzer is deferred
+to v0.2.1.
 
 ## Technology
 
@@ -107,7 +109,8 @@ Run project commands from the repository root.
 | `python scripts/dev.py frontend` | Start the Vite development server on port 5173 |
 | `python scripts/dev.py reset-demo` | Restore ignored ticket state from the immutable synthetic seed |
 | `python scripts/dev.py test` | Run backend and frontend unit/component tests |
-| `python scripts/dev.py eval` | Measure the deterministic product baseline |
+| `python scripts/dev.py eval` | Measure the frozen deterministic v0.1 baseline |
+| `python scripts/dev.py eval --suite v0.2` | Validate the frozen v0.2 datasets and contract; feature metrics activate in their implementation phases |
 | `python scripts/dev.py verify` | Run the full pre-commit verification gate |
 | `python scripts/dev.py verify --security` | Add a vulnerability audit of locked Python dependencies |
 
@@ -133,7 +136,9 @@ in `frontend/playwright.config.ts`.
 `eval/baseline.v0.1.json` is the frozen deterministic reference. Known misses
 remain visible so future providers must demonstrate a real improvement instead
 of moving the goalposts. `eval/baseline.v0.2.target.json` records the v0.2
-targets before implementation.
+targets before implementation. The v0.2 suite currently validates 86 versioned
+cases, exact policy provenance, routing precedence, and cross-platform dataset
+hashes without pretending unimplemented feature metrics exist.
 
 Metric definitions, datasets, and baseline rules are documented in
 [`eval/README.md`](eval/README.md).
@@ -244,19 +249,23 @@ live under [`docs/decisions/`](docs/decisions/README.md).
   setup, cloud deployment, or real commerce integration.
 - The frontend targets a local demo API and is not a production support client.
 
-## v0.2 roadmap
+## v0.2 direction
 
-The locked v0.2 milestone preserves all existing flows, public contracts, and
-safety invariants while focusing only on:
+The v0.2 scope, metric definitions, policy corpus, and 86 evaluation cases are
+now frozen. The next engineering decision is to select one concrete grounded
+generation provider through an ADR, then add its validated offline-first
+runtime boundary.
 
-1. RAG policy retrieval.
-2. Grounded AI response generation.
-3. Optional LLM analyzer.
-4. Expanded evaluation.
-5. Provider configuration.
-6. Safety regression.
+Implementation can then move into local H2 evidence retrieval, followed by
+policy-only grounded generation and application-owned citations. Release work
+will finish by exercising the existing safety invariants, deterministic mode,
+security checks, and four original E2E flows. These steps do not introduce new
+product flows or broaden model authority.
 
-Authentication, deployment, multi-tenant behavior, production storage, real
-commerce data, and model-controlled write actions remain out of scope. Target
-metrics were locked before implementation in
-[`eval/baseline.v0.2.target.json`](eval/baseline.v0.2.target.json).
+Authentication, deployment, multi-tenant behavior, production storage, vector
+infrastructure, external embeddings, real commerce data, model-controlled write
+actions, and UI expansion remain out of scope. The LLM analyzer is a possible
+v0.2.1 milestone, not a v0.2.0 release dependency. Exact product boundaries
+live in [`docs/demo-scope.md`](docs/demo-scope.md); evaluation gates live in
+[`eval/baseline.v0.2.target.json`](eval/baseline.v0.2.target.json) and
+[`eval/README.md`](eval/README.md).

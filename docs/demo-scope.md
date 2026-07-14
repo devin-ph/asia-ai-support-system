@@ -1,39 +1,44 @@
 # A.S.I.A Demo Scope
 
-## Current Milestone: v0.2 — RAG and Grounded AI
+## Current Milestone: v0.2.0 Evidence-Grounded Policy Assistant
 
-v0.2 introduces retrieval and grounded AI behind existing provider boundaries.
-It preserves all v0.1 product flows, the public API envelope, safety
-invariants, synthetic-data boundary, and confirmation guardrail without
-broadening the product surface.
+v0.2 upgrades the policy flow with local evidence retrieval and optional
+external grounded generation. It preserves all v0.1 product flows, the public
+API envelope, intent and sentiment labels, tool vocabulary, synthetic-data
+boundary, and confirmation guardrail.
 
 ### Version history
 
-| Version | Focus | Baseline |
+| Version | Focus | Baseline or target |
 | --- | --- | --- |
-| v0.1 | Deterministic vertical slice, 4 product flows | — |
-| v0.1.1 | Reproducibility hardening, CI, provider contracts, eval | `eval/baseline.v0.1.json` (frozen) |
-| v0.2 | RAG policy retrieval, grounded AI response, optional LLM analyzer | `eval/baseline.v0.2.target.json` |
+| v0.1 | Deterministic vertical slice and four product flows | Original behavior |
+| v0.1.1 | Reproducibility hardening, CI, provider contracts, and eval | `eval/baseline.v0.1.json` (frozen) |
+| v0.2.0 | Local policy retrieval and grounded policy generation | `eval/baseline.v0.2.target.json` |
+| v0.2.1 | Candidate milestone for an optional LLM analyzer | Deferred |
 
-`eval/baseline.v0.1.json` is frozen. It must not be overwritten to make v0.2
-scores look better.
+`eval/baseline.v0.1.json` and its four root JSONL inputs are frozen. They must
+not be overwritten or expanded to make v0.2 scores look better.
+
+The v0.2 target contract was amended before feature implementation on
+2026-07-14 to add refusal recall and citation validity, separate v0.2 datasets,
+and defer the LLM analyzer to v0.2.1. The amendment does not change the v0.1
+baseline.
 
 ---
 
 ## Demo Identity
 
-- Customer ID: `demo-customer-001` (Display: `Khách hàng Demo`)
-- All orders, policies, actions, and tickets are synthetic.
+- Customer ID: `demo-customer-001` (display: `Khách hàng Demo`).
+- All orders, policies, actions, tickets, and evaluation cases are synthetic.
 - Demo data uses a fixed July 2026 timeline.
-- The API must never return data from an order not owned by `demo-customer-001`.
+- The API must never return data from an order not owned by
+  `demo-customer-001`.
 
 ---
 
 ## Product Contract (Carried Forward)
 
-The four product flows, API envelope, and tool vocabulary are unchanged.
-
-### API Contract
+### API contract
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -42,92 +47,142 @@ The four product flows, API envelope, and tool vocabulary are unchanged.
 | `POST` | `/api/actions/{action_id}/confirm` | Confirm or cancel one pending action |
 | `GET` | `/api/admin/overview` | Aggregate non-PII counters |
 
-`POST /api/chat` response envelope (stable):
+`POST /api/chat` keeps this exact response envelope:
 
-```
-assistant_message · intent · sentiment · citations · tool_events · pending_action
+```text
+assistant_message | intent | sentiment | citations | tool_events | pending_action
 ```
 
 ### Tools
 
-`policy_search` · `order_lookup` · `ticket_create`
+`policy_search` | `order_lookup` | `ticket_create`
 
-A tool count increments only on actual lookup or confirmed write. Proposing a
-ticket does not count.
+A tool count increments only on an actual lookup or confirmed write. Proposing
+a ticket does not count. RAG retrieval and LLM generation do not add public tool
+names or admin counters.
 
-### Analysis labels
+### Analysis labels and precedence
 
-Intents: `order_lookup` · `shipping_policy` · `return_refund` · `warranty` ·
-`ticket_request` · `other`
+Intents: `order_lookup` | `shipping_policy` | `return_refund` | `warranty` |
+`ticket_request` | `other`
 
-Sentiments: `positive` · `neutral` · `negative`
+Sentiments: `positive` | `neutral` | `negative`
 
-v0.2 may add an LLM analyzer behind the analyzer provider boundary, but it must
-emit only these public labels. The deterministic analyzer remains a supported
-fallback.
+The deterministic analyzer remains the v0.2 routing authority. When a message
+contains multiple signals, it applies this precedence:
 
-### Acceptance rules (unchanged)
+```text
+ticket request
+> explicit order ID
+> order keywords
+> return/refund
+> warranty
+> shipping
+> other
+```
 
-**Policy answers:** Must be derived from `docs/policies/*.md`. Every supported
-answer includes exact citation (title, repo-relative source, section heading).
-If evidence is missing, return insufficient context and no citations. Do not
-invent policy details.
+Examples:
 
-**Order lookup:** Return only safe fields (order ID, status, carrier, estimated
-delivery, item count, last update). Never return address, phone, email, payment
-data, or internal ownership identifiers. Unknown and non-owned order IDs receive
-the same generic not-found response.
+- `Tạo ticket vì đơn ASIA-1001 giao trễ` routes to `ticket_request`.
+- `Đơn ASIA-1001 giao trễ thì chính sách thế nào?` routes to `order_lookup`.
+- `Tôi muốn đổi trả sản phẩm đang bảo hành` routes to `return_refund`.
 
-**Ticket confirmation:** Chat may propose `create_ticket` but must not create a
+An LLM analyzer is not part of v0.2.0. If introduced in v0.2.1, it must emit
+only the existing public labels and preserve a deterministic fallback.
+
+### Acceptance rules
+
+**Policy answers:** Evidence comes only from H2 sections in
+`docs/policies/return_policy.md`, `docs/policies/shipping_policy.md`, and
+`docs/policies/warranty_policy.md`. Every supported answer includes the exact
+title, repository-relative source, and section. Missing or below-threshold
+evidence returns insufficient context with no citations. The application
+creates citations from retrieved evidence; a model cannot supply citation
+metadata.
+
+**Order lookup:** Return only order ID, status, carrier, estimated delivery,
+item count, and last update. Never return address, phone, email, payment data,
+or internal ownership identifiers. Unknown and non-owned IDs receive the same
+generic not-found response.
+
+**Ticket confirmation:** Chat may propose `create_ticket` but cannot create a
 ticket. Creation requires a separate confirmation request. Cancellation has no
 side effects. Repeated confirmation is idempotent and returns the original
 ticket ID.
 
 **Admin overview:** Aggregate counters only. No message content, order ownership
-data, action payloads, or ticket content.
+data, action payloads, ticket content, provider controls, or AI-specific
+counters.
 
 ---
 
-## v0.2 In Scope
+## v0.2.0 In Scope
 
-1. **RAG policy retrieval** — retrieve from `docs/policies/*.md` only;
-   return exact citations; preserve insufficient-context fallback.
-2. **Grounded AI response generation** — generate from cited evidence and safe
-   tool results only; fall back to insufficient context when evidence is absent
-   or below threshold.
-3. **Optional LLM analyzer** — configurable behind the analyzer provider
-   boundary; deterministic analyzer remains selectable; all outputs map to
-   existing label enums.
-4. **Expanded eval** — broader Vietnamese paraphrases, unsupported queries,
-   grounded-generation checks, provider-config cases, safety regression; known
-   hard cases must not be removed.
-5. **Provider config** — select providers via `.env` without committing secrets;
-   fail closed when required config is missing; ticket write providers remain
-   behind application state and the confirmation endpoint.
-6. **Safety regression** — extend test and eval coverage for all 10 invariants.
+1. **Local policy retrieval:** Load only allowlisted policy Markdown, chunk by
+   H2, assign stable evidence IDs, retrieve in memory, and return exact
+   provenance or insufficient context. No retrieval network call is allowed.
+2. **Grounded policy generation:** Optionally generate Vietnamese policy prose
+   from sufficient retrieved evidence. Order, ticket, admin, and conversation
+   data never reach the generator.
+3. **Application-owned citations:** Attach citation metadata only from evidence
+   supplied to the generator. No evidence means no generator call.
+4. **Expanded evaluation:** Add versioned v0.2 retrieval, generation, routing,
+   refusal, citation, egress, and safety cases without changing v0.1 datasets.
+5. **Provider configuration:** Select template or one concrete external
+   generator through validated local configuration. Template mode remains the
+   offline default. Missing required settings fail clearly.
+6. **Safety regression:** Preserve executable coverage for all 10 invariants and
+   the original four E2E flows.
 
-## v0.2 Out of Scope
+## v0.2.0 Out of Scope
 
-Auth · authorization · multi-tenant · cloud/Docker deployment · PostgreSQL ·
-queues · caches · production storage · real commerce integrations · real
-customers · real PII · server-side conversation history · new product flows ·
-model-controlled irreversible writes · changing the public API envelope, labels,
-tool vocabulary, or order safe-field allowlist without updating this document.
+LLM analyzer (deferred to v0.2.1) | external embeddings | vector database |
+agent framework | LLM tool calling | model-controlled writes | auth |
+authorization | multi-tenant behavior | cloud or Docker deployment |
+PostgreSQL | queues | caches | production storage | real commerce integrations |
+real customers or PII | server-side conversation history | public AI counters |
+provider controls or badges | UI redesign | new product flows.
+
+Changing the public API envelope, labels, tool vocabulary, or order safe-field
+allowlist requires a separately reviewed scope amendment.
+
+---
+
+## Data Egress And Failure Contract
+
+- The deterministic analyzer and local retriever make no external calls.
+- An external generator receives only a redacted policy query, allowlisted
+  evidence text, and generation instructions.
+- Order results, ticket data, pending actions, admin state, conversation
+  history, internal customer IDs, and raw logs are never sent externally.
+- Redaction covers tested structured identifiers such as demo order IDs, email
+  addresses, and phone numbers; it is not represented as general PII detection.
+- Unknown providers, incompatible settings, and missing selected-provider
+  configuration fail application startup.
+- Provider authentication rejection is surfaced as a service error rather than
+  disguised as successful AI mode.
+- Timeout, temporary unavailability, empty output, or malformed output falls
+  back to a deterministic template derived from retrieved evidence.
+- Request cancellation propagates. It is not converted into a fallback.
+- Missing or insufficient evidence returns the existing safe refusal and never
+  calls a generator.
 
 ---
 
 ## v0.2 Target Metrics
 
-Locked before implementation in `eval/baseline.v0.2.target.json`.
+Locked before feature implementation in `eval/baseline.v0.2.target.json`.
 
 | Metric | v0.2 minimum |
-| --- | --- |
-| `policy_section_hit_rate` | ≥ 0.90 (expanded supported cases) |
-| `insufficient_context_precision` | ≥ 0.90 (expanded unsupported cases) |
-| `grounded_response_pass_rate` | ≥ 0.95 |
-| `citation_coverage_rate` | 1.00 for supported generated answers |
-| `intent_accuracy` (LLM analyzer) | ≥ 0.90; deterministic fallback ≥ v0.1 frozen score |
-| `order_id_extraction_accuracy` | No regression from v0.1 frozen baseline |
+| --- | ---: |
+| `policy_section_hit_rate` | 0.90 |
+| `unsupported_query_precision` | 0.90 |
+| `unsupported_query_recall` | 1.00 |
+| `grounded_response_pass_rate` | 0.95 |
+| `citation_coverage_rate` | 1.00 |
+| `citation_validity_rate` | 1.00 |
+| `routing_precedence_contract_pass_rate` | 1.00 |
+| `order_id_extraction_accuracy` | 0.928571 |
 | `order_privacy_guardrail_pass_rate` | 1.00 |
 | `confirmation_guardrail_pass_rate` | 1.00 |
 | `provider_config_contract_pass_rate` | 1.00 |
@@ -150,19 +205,25 @@ Locked before implementation in `eval/baseline.v0.2.target.json`.
 
 ---
 
-## Definition of Done
+## Definition Of Done
 
-v0.2 is done when:
+v0.2.0 is done when:
 
-- All four v0.1 flows work through the API.
-- RAG policy retrieval returns exact citations or insufficient context.
-- Grounded response generation uses only cited evidence and safe tool outputs.
-- The optional LLM analyzer can be enabled or disabled without changing public labels.
-- Provider config fails closed when required local settings are missing; no secrets committed.
-- Expanded eval reports against v0.2 target metrics; `eval/baseline.v0.1.json` is unchanged.
-- Safety regression coverage confirms all 10 invariants hold.
-- `python scripts/dev.py doctor` passes.
-- `python scripts/dev.py test` passes.
-- `python scripts/dev.py verify` passes before a commit or pull request.
-- `python scripts/dev.py reset-demo` restores `var/demo_tickets.json` without mutating fixtures or eval snapshots.
-- README and response examples match the implemented API.
+- All four v0.1 flows and the exact public contracts still work.
+- Local retrieval meets the frozen section-hit and refusal targets.
+- Supported generated policy responses use only retrieved evidence.
+- No-evidence requests never invoke a generator.
+- Citation coverage and validity are both 1.00.
+- The curated grounded-response pass rate is at least 0.95.
+- Template mode and CI run without secrets or network access.
+- External provider configuration, egress, timeout, auth, malformed-output, and
+  fallback behavior have executable tests.
+- All 10 invariants and the original E2E flows pass.
+- `eval/baseline.v0.1.json` and its datasets are unchanged.
+- A reference live result records provider, model, prompt, corpus, dataset, and
+  parameter provenance without secrets or raw prompts.
+- The v0.2 manifest, dataset hash, policy corpus hash, and frozen v0.1 input hash
+  match their committed contract.
+- `python scripts/dev.py doctor`, `python scripts/dev.py verify`, release
+  security checks, and Playwright pass at their documented gates.
+- README, evaluation docs, ADRs, and examples match implemented behavior.

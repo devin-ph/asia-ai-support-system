@@ -4,12 +4,17 @@ These instructions apply to all files under `frontend/`.
 
 ## Purpose
 
-The frontend is a minimal React and TypeScript interface for the
-`v0.1: Runnable Vertical Slice` milestone. It renders the four demo flows
-(policy chat, order lookup, ticket confirmation, admin overview) and connects
-exclusively to the local backend API.
+The frontend remains a minimal React and TypeScript interface for the
+`v0.2.0: Evidence-Grounded Policy Assistant` milestone. It renders the four
+existing demo flows (policy chat, order lookup, ticket confirmation, admin
+overview) and connects exclusively to the local backend API.
 
 Read `../docs/demo-scope.md` before changing behavior.
+
+v0.2 does not add provider controls, provider badges, AI counters, or a UI
+redesign. Frontend changes are limited to preserving compatibility and showing
+the existing answer and citation contract correctly when policy prose becomes
+generated.
 
 ## Architecture
 

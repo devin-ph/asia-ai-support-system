@@ -4,16 +4,21 @@
 
 A.S.I.A is a demo AI customer support system for Vietnamese e-commerce support.
 
-The current milestone is **v0.1.1: Reproducibility Hardening**.
+The current milestone is **v0.2.0: Evidence-Grounded Policy Assistant**.
 
 ## Current Goal
 
-Build a local demo that supports four flows:
+Preserve the four local demo flows while upgrading policy support:
 
-1. Vietnamese policy questions with grounded answers and citations.
+1. Vietnamese policy questions with local evidence retrieval, grounded answers,
+   and application-owned citations.
 2. Synthetic order lookup for a fixed demo customer.
 3. Support ticket drafting with explicit user confirmation.
 4. Basic admin overview showing message, ticket, intent, sentiment, and tool counts.
+
+Order, ticket, and admin behavior remains deterministic. An optional external
+generator is limited to supported policy answers. The LLM analyzer is deferred
+to v0.2.1.
 
 ## Source of Truth
 
@@ -25,6 +30,11 @@ Read documents in this order:
 4. `frontend/AGENTS.md` when working inside `frontend/`
 
 Do not implement features outside `docs/demo-scope.md` unless the user explicitly requests them.
+
+Keep planning lightweight. README may summarize near-term direction, while
+durable technical choices belong in focused ADRs under `docs/decisions/`. Do
+not create parallel implementation specifications that restate scope, metrics,
+invariants, or accepted ADRs.
 
 Any change to required flows, API shapes, intent or sentiment labels, tool
 semantics, storage behavior, safety invariants, or milestone acceptance
@@ -41,12 +51,14 @@ python scripts/dev.py backend
 python scripts/dev.py frontend
 python scripts/dev.py test
 python scripts/dev.py eval
+python scripts/dev.py eval --suite v0.2
 python scripts/dev.py verify
 ```
 
 `doctor` validates runtime prerequisites. `test` runs the fast unit/component
-loop. `eval` measures the deterministic baseline. `verify` is the pre-commit
-gate. See [`README.md`](README.md) for detailed descriptions and
+loop. `eval` measures the frozen v0.1 baseline; `eval --suite v0.2` validates
+the current v0.2 contract or runs its implemented metrics. `verify` is the
+pre-commit gate. See [`README.md`](README.md) for detailed descriptions and
 [`eval/README.md`](eval/README.md) for metric definitions.
 
 ## Safety Rules
@@ -64,17 +76,28 @@ gate. See [`README.md`](README.md) for detailed descriptions and
   of inventing an answer.
 * Order lookup must only return safe fields and must enforce the fixed demo
   customer ownership check.
+* Policy retrieval must remain local and restricted to allowlisted Markdown.
+* An external generator may receive only a redacted policy query, allowlisted
+  evidence, and generation instructions.
+* Never send order results, customer ownership data, ticket or pending-action
+  data, admin state, conversation history, or raw logs to an external provider.
+* Citation metadata must be built by the application from retrieved evidence,
+  never accepted from model output.
 
 ## Non-Negotiable Invariants
 
 These constraints must hold after every change. No exception, no workaround.
 
-1. Chat route must not directly execute irreversible write actions.
-2. Ticket creation must require explicit user confirmation.
-3. Policy answers must cite evidence or return insufficient context.
-4. Demo data must remain synthetic.
-5. Running the demo must not dirty tracked fixtures.
-6. Unauthorized and unknown orders must not leak distinguishable details.
+1. Repository fixtures contain synthetic data only.
+2. Policy claims require matching repository evidence.
+3. Order details require a fixed-customer ownership check.
+4. Ticket creation happens only in the confirmation endpoint.
+5. Confirmation is idempotent per action ID.
+6. API and admin responses do not expose unsafe order fields or stored message content.
+7. Tests write tickets only to temporary files, never to the repository fixture.
+8. Runtime ticket writes never mutate files under `data/fixtures/`.
+9. Secrets and credentials are never committed.
+10. The chat route has no direct access to a ticket write provider.
 
 If a proposed change would violate any invariant, stop and report the conflict
 instead of proceeding.
@@ -144,7 +167,7 @@ A change is ready for review when:
 * No non-negotiable invariant is violated.
 * Product-contract or API shape changes update `docs/demo-scope.md` in the same
   change.
-* New behavior stays inside the v0.1 scope unless explicitly requested.
+* New behavior stays inside the v0.2 scope unless explicitly requested.
 * No secrets, real PII, generated build artifacts, dependency folders, or
   runtime state are committed.
 

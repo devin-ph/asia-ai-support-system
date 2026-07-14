@@ -4,9 +4,9 @@ These instructions apply to all files under `backend/`.
 
 ## Purpose
 
-The backend implements the deterministic API contract for the
-`v0.1: Runnable Vertical Slice` milestone. Read
-`../docs/demo-scope.md` before changing behavior.
+The backend preserves the deterministic API contract while implementing the
+`v0.2.0: Evidence-Grounded Policy Assistant` milestone. Read
+`../docs/demo-scope.md` and `../eval/README.md` before changing behavior.
 
 ## Architecture
 
@@ -43,6 +43,16 @@ Keep route handlers thin. Business rules belong in dedicated services or
 - Policy responses without evidence must contain no citations.
 - Policy citations contain the Markdown title, repository-relative source, and
   exact H2 section.
+- Local retrieval is the only supported policy evidence source. External
+  embeddings and network retrieval are out of scope.
+- The application builds citations from retrieved evidence. Never trust source,
+  title, section, or evidence IDs emitted by a model.
+- An external generator may return policy answer text only and may run only
+  after sufficient allowlisted evidence exists.
+- External provider input is limited to a redacted policy query, allowlisted
+  evidence text, and generation instructions.
+- Never send order results, ownership data, ticket payloads, pending actions,
+  admin state, conversation history, or raw logs to an external provider.
 - Chat may call `draft_ticket` but must never execute or persist a ticket.
 - The chat route may access only `ChatProviders`; that bundle contains no
   ticket write capability.
@@ -60,8 +70,9 @@ two concurrent confirmations cannot create two tickets in one process.
 
 Write JSON through `storage.py`; tests must inject a temporary ticket path.
 Never write runtime state back into `data/fixtures/`.
-Do not add PostgreSQL, migrations, background workers, or external services in
-this milestone.
+Do not add PostgreSQL, migrations, background workers, external embeddings,
+vector databases, or services beyond the one reviewed policy generator in this
+milestone.
 
 ## Synthetic Data
 
@@ -93,12 +104,18 @@ for:
 - admin message, intent, sentiment, ticket, and tool counters.
 - deterministic and fake implementations passing the same provider contracts;
 - provider replacement preserving the public chat response envelope.
+- v0.2 dataset schemas, hashes, metric contracts, and v0.1 baseline immutability;
+- local retrieval provenance, sufficiency, and refusal behavior;
+- no-evidence no-call, external-data egress, redaction, timeout, malformed
+  output, authentication, cancellation, and grounded fallback behavior;
+- application-owned citation coverage and validity.
 
 Run:
 
 ```bash
 python scripts/dev.py test
 python scripts/dev.py eval
+python scripts/dev.py eval --suite v0.2
 ```
 
 For a backend-only iteration, run `python -m pytest backend/tests` from the
@@ -116,6 +133,9 @@ depend on execution order.
 - Keep code and identifiers in English.
 - Avoid broad `Any` types in domain state.
 - Do not log request bodies or action payloads.
+- Do not log raw provider prompts or responses by default. Internal telemetry is
+  limited to provider/model identifiers, prompt version, latency, evidence IDs,
+  fallback reason, and sanitized error category.
 - Add dependencies only when the standard library and current stack are
   insufficient.
 - Declare direct dependencies in `requirements.in`. Regenerate the fully pinned
