@@ -109,6 +109,46 @@ def test_v02_routing_contract_matches_the_deterministic_authority() -> None:
     result = EVALUATION.evaluate_v02_routing(datasets["routing_safety"])
 
     assert result.snapshot() == {"score": 1.0, "passed": 15, "total": 15}
+
+
+def test_v02_retrieval_meets_the_frozen_gate() -> None:
+    datasets = EVALUATION.load_v02_datasets()
+    metrics = EVALUATION.evaluate_v02_retrieval(datasets["policy_retrieval"])
+
+    assert metrics["policy_section_hit_rate"].snapshot() == {
+        "score": 1.0,
+        "passed": 35,
+        "total": 35,
+    }
+    assert metrics["policy_top_1_hit_rate"].snapshot() == {
+        "score": 1.0,
+        "passed": 35,
+        "total": 35,
+    }
+    assert metrics["unsupported_query_precision"].snapshot() == {
+        "score": 1.0,
+        "passed": 15,
+        "total": 15,
+    }
+    assert metrics["unsupported_query_recall"].snapshot() == {
+        "score": 1.0,
+        "passed": 15,
+        "total": 15,
+    }
+
     report = EVALUATION.build_v02_contract_report()
-    assert report["status"] == "ready_for_feature_implementation"
-    assert report["feature_metrics_status"] == "not_measured_in_phase_0"
+    assert report["status"] == "retrieval_gate_passed"
+    assert report["feature_metrics_status"] == "retrieval_measured_generation_pending"
+    assert report["retrieval_config"] == {
+        "strategy": "normalized_idf_lexical_plus_word_ngrams",
+        "top_k": 2,
+        "minimum_score": 0.24,
+        "weights": {
+            "lexical": 0.68,
+            "word_ngram": 0.17,
+            "heading": 0.1,
+            "exact_phrase": 0.05,
+        },
+        "external_network": False,
+        "external_embeddings": False,
+    }

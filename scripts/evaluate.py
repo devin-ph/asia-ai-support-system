@@ -23,6 +23,15 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app.order_service import extract_order_reference  # noqa: E402
+from app.policy_retrieval import (  # noqa: E402
+    DEFAULT_TOP_K,
+    EXACT_PHRASE_WEIGHT,
+    HEADING_WEIGHT,
+    LEXICAL_WEIGHT,
+    MIN_RETRIEVAL_SCORE,
+    NGRAM_WEIGHT,
+    LocalPolicyRetriever,
+)
 from app.providers import default_chat_providers  # noqa: E402
 from app.providers.tickets import LocalTicketProvider  # noqa: E402
 from app.storage import load_tickets  # noqa: E402
@@ -436,8 +445,96 @@ def evaluate_v02_routing(cases: tuple[dict[str, Any], ...]) -> MetricResult:
     return MetricResult(len(cases) - len(failures), len(cases), tuple(failures))
 
 
+def evaluate_v02_retrieval(
+    cases: tuple[dict[str, Any], ...],
+) -> dict[str, MetricResult]:
+    """Measure the local retriever against the frozen supported/refusal set."""
+    retriever = LocalPolicyRetriever()
+    section_failures: list[str] = []
+    top_one_failures: list[str] = []
+    false_refusals: list[str] = []
+    missed_refusals: list[str] = []
+    supported_total = 0
+    unsupported_total = 0
+    predicted_refusals = 0
+    correct_refusals = 0
+
+    for case in cases:
+        query = _required_string(case, "query")
+        result = retriever.retrieve(query)
+        ranked = retriever.rank(query)
+        supported = case["supported"]
+
+        if supported:
+            supported_total += 1
+            expected = (
+                _required_string(case, "expected_source"),
+                _required_string(case, "expected_section"),
+            )
+            returned = {(item.source, item.section) for item in result.evidence}
+            if expected not in returned:
+                shown = [
+                    f"{candidate.evidence.evidence_id}@{candidate.score:.6f}"
+                    for candidate in ranked[:DEFAULT_TOP_K]
+                ]
+                section_failures.append(
+                    f"{case['id']}: expected={expected!r}, got={shown or ['refused']}"
+                )
+            if (
+                not ranked
+                or (
+                    ranked[0].evidence.source,
+                    ranked[0].evidence.section,
+                )
+                != expected
+            ):
+                actual = ranked[0].evidence.evidence_id if ranked else "refused"
+                top_one_failures.append(f"{case['id']}: expected={expected!r}, top_1={actual}")
+        else:
+            unsupported_total += 1
+
+        if not result.sufficient:
+            predicted_refusals += 1
+            if supported:
+                false_refusals.append(f"{case['id']}: refused a supported query")
+            else:
+                correct_refusals += 1
+        elif not supported:
+            returned_ids = [item.evidence_id for item in result.evidence]
+            missed_refusals.append(
+                f"{case['id']}: returned evidence for unsupported query: {returned_ids}"
+            )
+
+    return {
+        "policy_section_hit_rate": MetricResult(
+            supported_total - len(section_failures),
+            supported_total,
+            tuple(section_failures),
+        ),
+        "policy_top_1_hit_rate": MetricResult(
+            supported_total - len(top_one_failures),
+            supported_total,
+            tuple(top_one_failures),
+        ),
+        "unsupported_query_precision": MetricResult(
+            correct_refusals,
+            predicted_refusals,
+            tuple(false_refusals),
+        ),
+        "unsupported_query_recall": MetricResult(
+            correct_refusals,
+            unsupported_total,
+            tuple(missed_refusals),
+        ),
+    }
+
+
+def _metric_report(result: MetricResult) -> dict[str, Any]:
+    return {**result.snapshot(), "failures": list(result.failures)}
+
+
 def build_v02_contract_report() -> dict[str, Any]:
-    """Build the Phase 0 report; feature metrics intentionally remain unmeasured."""
+    """Validate the frozen contract and measure implemented retrieval behavior."""
     datasets = load_v02_datasets()
     validate_v02_target_contract(datasets)
     routing = evaluate_v02_routing(datasets["routing_safety"])
@@ -446,11 +543,24 @@ def build_v02_contract_report() -> dict[str, Any]:
             "v0.2 routing labels disagree with the current deterministic analyzer: "
             + "; ".join(routing.failures)
         )
+    retrieval = evaluate_v02_retrieval(datasets["policy_retrieval"])
+    for name in (
+        "policy_section_hit_rate",
+        "unsupported_query_precision",
+        "unsupported_query_recall",
+    ):
+        result = retrieval[name]
+        minimum = V02_LOCKED_MINIMUMS[name]
+        if result.score < minimum:
+            raise EvaluationDataError(
+                f"{name}={result.score:.6f} is below locked minimum {minimum:.6f}: "
+                + "; ".join(result.failures)
+            )
     return {
         "suite_id": "v0.2-evaluation-contract",
-        "evaluator_schema_version": 2,
-        "status": "ready_for_feature_implementation",
-        "feature_metrics_status": "not_measured_in_phase_0",
+        "evaluator_schema_version": 3,
+        "status": "retrieval_gate_passed",
+        "feature_metrics_status": "retrieval_measured_generation_pending",
         "dataset_hash": compute_v02_dataset_hash(),
         "policy_corpus_hash": compute_policy_corpus_hash(),
         "datasets": {
@@ -471,6 +581,20 @@ def build_v02_contract_report() -> dict[str, Any]:
             "v0.1_datasets_unchanged": True,
             "routing_precedence_contract": routing.snapshot(),
         },
+        "retrieval_config": {
+            "strategy": "normalized_idf_lexical_plus_word_ngrams",
+            "top_k": DEFAULT_TOP_K,
+            "minimum_score": MIN_RETRIEVAL_SCORE,
+            "weights": {
+                "lexical": LEXICAL_WEIGHT,
+                "word_ngram": NGRAM_WEIGHT,
+                "heading": HEADING_WEIGHT,
+                "exact_phrase": EXACT_PHRASE_WEIGHT,
+            },
+            "external_network": False,
+            "external_embeddings": False,
+        },
+        "feature_metrics": {name: _metric_report(result) for name, result in retrieval.items()},
     }
 
 
@@ -694,7 +818,18 @@ def _print_v02_contract_report(report: dict[str, Any]) -> None:
         "routing_precedence_contract_pass_rate: "
         f"{routing['score']:.1%} ({routing['passed']}/{routing['total']})"
     )
-    print("\nRetrieval and generation metrics begin after their features are implemented.")
+    config = report["retrieval_config"]
+    print(
+        "retrieval: "
+        f"top_k={config['top_k']}, minimum_score={config['minimum_score']}, "
+        f"strategy={config['strategy']}"
+    )
+    print("retrieval metrics:")
+    for name, metric in report["feature_metrics"].items():
+        print(f"  - {name}: {metric['score']:.1%} ({metric['passed']}/{metric['total']})")
+        for failure in metric["failures"]:
+            print(f"      {failure}")
+    print("\nGrounded-generation metrics begin after route integration is implemented.")
 
 
 def _check_baseline(snapshot: dict[str, Any], path: Path) -> bool:

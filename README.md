@@ -23,9 +23,10 @@ metrics are frozen before feature implementation.
 | Admin overview | Shows message, ticket, intent, sentiment, and tool counts | Exposes aggregate counters only, without message or customer content |
 
 The public demo currently uses deterministic providers so behavior is
-repeatable. v0.2 now has an offline-first runtime boundary for optional grounded
-generation; local evidence retrieval and route integration follow behind the
-same contracts and guardrails. The optional LLM analyzer is deferred to v0.2.1.
+repeatable. v0.2 now has an offline-first runtime boundary plus measured local
+H2 evidence retrieval; public route integration and grounded generation follow
+behind the same contracts and guardrails. The optional LLM analyzer is deferred
+to v0.2.1.
 
 ## Technology
 
@@ -130,7 +131,7 @@ Run project commands from the repository root.
 | `python scripts/dev.py reset-demo` | Restore ignored ticket state from the immutable synthetic seed |
 | `python scripts/dev.py test` | Run backend and frontend unit/component tests |
 | `python scripts/dev.py eval` | Measure the frozen deterministic v0.1 baseline |
-| `python scripts/dev.py eval --suite v0.2` | Validate the frozen v0.2 datasets and contract; feature metrics activate in their implementation phases |
+| `python scripts/dev.py eval --suite v0.2` | Validate the frozen v0.2 contract and enforce implemented retrieval gates |
 | `python scripts/dev.py verify` | Run the full pre-commit verification gate |
 | `python scripts/dev.py verify --security` | Add a vulnerability audit of locked Python dependencies |
 
@@ -156,9 +157,10 @@ in `frontend/playwright.config.ts`.
 `eval/baseline.v0.1.json` is the frozen deterministic reference. Known misses
 remain visible so future providers must demonstrate a real improvement instead
 of moving the goalposts. `eval/baseline.v0.2.target.json` records the v0.2
-targets before implementation. The v0.2 suite currently validates 86 versioned
-cases, exact policy provenance, routing precedence, and cross-platform dataset
-hashes without pretending unimplemented feature metrics exist.
+targets before implementation. The v0.2 suite validates 86 versioned cases,
+exact policy provenance, routing precedence, cross-platform dataset hashes, and
+the measured local retrieval gates. Grounded-generation metrics remain pending
+until that capability exists.
 
 Metric definitions, datasets, and baseline rules are documented in
 [`eval/README.md`](eval/README.md).
@@ -260,7 +262,9 @@ live under [`docs/decisions/`](docs/decisions/README.md).
 
 ## Current limitations
 
-- Intent, sentiment, and policy retrieval are deterministic and keyword-based.
+- Intent and sentiment are deterministic and keyword-based. The public policy
+  flow still uses the v0.1 keyword search; the measured local H2 retriever is
+  not route-integrated yet.
 - The demo represents one fixed synthetic customer with no authentication or
   tenant isolation.
 - Conversations, pending actions, and aggregate counters are process-local.
@@ -278,11 +282,12 @@ selects the OpenAI Responses API as the single optional external generator;
 its validated async runtime boundary is available while template generation
 remains the offline default.
 
-The next implementation step is local H2 evidence retrieval, followed by
-policy-only grounded generation with application-owned citations. Release work
-will finish by exercising the existing safety invariants, deterministic mode,
-security checks, and four original E2E flows. These steps do not introduce new
-product flows or broaden model authority.
+Local H2 evidence retrieval now passes its frozen gates without embeddings or
+network calls. The next implementation step is policy-only grounded generation
+with application-owned citations, followed by route integration and regression
+coverage. Release work will finish by exercising the existing safety
+invariants, deterministic mode, security checks, and four original E2E flows.
+These steps do not introduce new product flows or broaden model authority.
 
 Authentication, deployment, multi-tenant behavior, production storage, vector
 infrastructure, external embeddings, real commerce data, model-controlled write

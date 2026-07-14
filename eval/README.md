@@ -13,7 +13,7 @@ Run from the repository root:
 python scripts/dev.py eval
 python scripts/dev.py eval --suite v0.1
 
-# Validate the frozen v0.2 datasets, target, provenance, and routing labels.
+# Validate the frozen v0.2 contract and measure the local retriever.
 python scripts/dev.py eval --suite v0.2
 
 # Machine-readable reports.
@@ -21,10 +21,11 @@ python scripts/dev.py eval --suite v0.1 --json
 python scripts/dev.py eval --suite v0.2 --json
 ```
 
-The v0.2 command is currently a **contract validator**, not a feature benchmark.
-It intentionally reports retrieval and generation metrics as not measured until
-those capabilities exist. `python scripts/dev.py verify` keeps checking the
-exact v0.1 snapshot.
+The v0.2 command validates the frozen datasets, target, provenance, and routing
+labels, then enforces the implemented retrieval gates. Grounded-generation
+metrics remain pending until that capability is integrated. The default eval
+command and `python scripts/dev.py verify` keep checking the exact v0.1
+snapshot; run the v0.2 command explicitly for its phase gate.
 
 ## Frozen v0.1 baseline
 
@@ -103,6 +104,47 @@ Supported objects contain:
 Unsupported objects omit `expected_source` and `expected_section`. Exact fields
 are validated; each referenced source must be allowlisted and each section must
 exist as an H2 in the current policy corpus.
+
+### Local retrieval benchmark
+
+The Phase 2 retriever is deliberately small and offline:
+
+- it loads exactly the three allowlisted policy files and treats each H2 as one
+  evidence unit;
+- stable evidence IDs use `<source>#<normalized-heading>`, with deterministic
+  `-2`, `-3`, and later suffixes for duplicate headings;
+- Vietnamese text is lowercased and diacritic-normalized before IDF-weighted
+  token overlap, heading overlap, and word n-gram matching;
+- ranking is deterministic, in memory, and independent of source load order;
+- it has no embedding model, vector database, persistent index, or network
+  path.
+
+The fixed score is:
+
+```text
+0.68 * lexical + 0.17 * word_ngram + 0.10 * heading + 0.05 * exact_phrase
+```
+
+`top_k` is `2` and the single sufficiency threshold is `0.24`. These parameters
+apply to every query; there are no topic- or case-specific thresholds. On the
+frozen dataset, the lowest supported top score is `0.248536` and the highest
+unsupported top score is `0.225525`, so `0.24` sits inside the observed gap.
+That calibration is evidence for this versioned set, not a claim of universal
+separation on arbitrary queries.
+
+Current measured result:
+
+| Metric | Result | Gate |
+| --- | ---: | ---: |
+| `policy_section_hit_rate` | 35/35 (1.00) | >= 0.90 |
+| `policy_top_1_hit_rate` | 35/35 (1.00) | diagnostic |
+| `unsupported_query_precision` | 15/15 (1.00) | >= 0.90 |
+| `unsupported_query_recall` | 15/15 (1.00) | = 1.00 |
+
+Top-1 is reported to make ranking quality visible; the release contract uses
+top-k section hit because two evidence units may be passed to grounded
+generation. The evaluator also emits case IDs, expected evidence, returned
+evidence IDs, and scores for any failure.
 
 ### Grounded-generation cases
 
