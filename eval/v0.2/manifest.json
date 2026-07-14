@@ -1,0 +1,32 @@
+{
+  "manifest_schema_version": 1,
+  "suite": "v0.2",
+  "frozen_on": "2026-07-14",
+  "files": [
+    {
+      "name": "policy_retrieval",
+      "path": "eval/v0.2/policy_retrieval.vi.jsonl",
+      "cases": 50,
+      "content_hash": "sha256:baea20c40ef52344c00ec520f1c436b27c80043accff3d6eff5f1b0e50c76a48"
+    },
+    {
+      "name": "grounded_generation",
+      "path": "eval/v0.2/grounded_generation.vi.jsonl",
+      "cases": 21,
+      "content_hash": "sha256:f52ba68f9b6ec67246c80c0b81b268690525f78c4f4882d4726649fa8d1edbcd"
+    },
+    {
+      "name": "routing_safety",
+      "path": "eval/v0.2/routing_safety.vi.jsonl",
+      "cases": 15,
+      "content_hash": "sha256:745e4f6225bcdde7ce5fa3feeb5dc5b8e96b2b999da73c3096d972a0f8fc3ced"
+    }
+  ],
+  "combined_dataset_hash": "sha256:5246bfbd5c048ef9255993f59666727ee5775d4c4caaab1b4fc4526fbdc03d8a",
+  "policy_sources": [
+    "docs/policies/return_policy.md",
+    "docs/policies/shipping_policy.md",
+    "docs/policies/warranty_policy.md"
+  ],
+  "policy_corpus_hash": "sha256:61d830ea53bbe61d828e0d57e367d598259430551c52fbd6192017b29882ed17"
+}

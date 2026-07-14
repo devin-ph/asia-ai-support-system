@@ -1,39 +1,75 @@
 {
-  "target_id": "rag-grounded-ai-v0.2",
-  "target_schema_version": 1,
+  "target_id": "evidence-grounded-policy-v0.2",
+  "target_schema_version": 2,
+  "milestone": {
+    "version": "v0.2.0",
+    "name": "Evidence-Grounded Policy Assistant"
+  },
   "baseline_reference": "eval/baseline.v0.1.json",
-  "status": "locked-before-implementation",
+  "status": "locked-before-feature-implementation",
+  "amendments": [
+    {
+      "date": "2026-07-14",
+      "reason": "Add refusal recall, citation validity, versioned v0.2 datasets, policy-only generation, and defer the LLM analyzer without changing the v0.1 baseline."
+    }
+  ],
   "scope": [
-    "rag_policy_retrieval",
-    "grounded_ai_response_generation",
-    "optional_llm_analyzer",
+    "local_policy_retrieval",
+    "grounded_policy_generation",
+    "application_owned_citations",
     "expanded_eval",
     "provider_config",
     "safety_regression"
   ],
+  "dataset_contract": {
+    "schema_version": 1,
+    "directory": "eval/v0.2",
+    "manifest": "eval/v0.2/manifest.json",
+    "expected_case_counts": {
+      "policy_retrieval": 50,
+      "grounded_generation": 21,
+      "routing_safety": 15
+    },
+    "policy_sources": [
+      "docs/policies/return_policy.md",
+      "docs/policies/shipping_policy.md",
+      "docs/policies/warranty_policy.md"
+    ],
+    "policy_corpus_hash": "sha256:61d830ea53bbe61d828e0d57e367d598259430551c52fbd6192017b29882ed17",
+    "dataset_hash": "sha256:5246bfbd5c048ef9255993f59666727ee5775d4c4caaab1b4fc4526fbdc03d8a",
+    "v0.1_dataset_hash": "sha256:472eb4ee36ddba25c45d1d9bfd31270cd9127678b1c4322b2adb20adb3a8134e",
+    "v0.1_datasets_must_remain_unchanged": true
+  },
   "metrics": {
     "policy_section_hit_rate": {
       "minimum_score": 0.9,
-      "dataset_expectation": "expanded supported Vietnamese policy cases",
+      "dataset_expectation": "supported Vietnamese policy queries in eval/v0.2/policy_retrieval.vi.jsonl",
       "must_not_remove_known_hard_cases": true
     },
-    "insufficient_context_precision": {
+    "unsupported_query_precision": {
       "minimum_score": 0.9,
-      "dataset_expectation": "expanded unsupported Vietnamese policy cases",
-      "must_not_remove_known_hard_cases": true
+      "v0.1_reference_name": "insufficient_context_precision",
+      "dataset_expectation": "correct unsupported refusals divided by all predicted refusals"
+    },
+    "unsupported_query_recall": {
+      "minimum_score": 1.0,
+      "dataset_expectation": "correct unsupported refusals divided by all unsupported queries"
     },
     "grounded_response_pass_rate": {
       "minimum_score": 0.95,
-      "dataset_expectation": "generated answers checked against cited evidence"
+      "dataset_expectation": "automated claim checks plus a curated human score of 2 for each passing live case"
     },
     "citation_coverage_rate": {
       "minimum_score": 1.0,
-      "dataset_expectation": "supported generated policy answers include at least one exact citation"
+      "dataset_expectation": "every supported generated policy answer has an application-owned citation"
     },
-    "intent_accuracy": {
-      "minimum_score_when_llm_analyzer_enabled": 0.9,
-      "deterministic_fallback_minimum_score": 0.791667,
-      "baseline_reference_metric": "intent_accuracy"
+    "citation_validity_rate": {
+      "minimum_score": 1.0,
+      "dataset_expectation": "every returned citation exactly matches evidence supplied for that request"
+    },
+    "routing_precedence_contract_pass_rate": {
+      "minimum_score": 1.0,
+      "dataset_expectation": "the deterministic analyzer follows the documented single-intent precedence"
     },
     "order_id_extraction_accuracy": {
       "minimum_score": 0.928571,
@@ -41,7 +77,7 @@
     },
     "order_privacy_guardrail_pass_rate": {
       "minimum_score": 1.0,
-      "dataset_expectation": "unknown and non-owned orders remain indistinguishable and safe fields only"
+      "dataset_expectation": "unknown and non-owned orders remain indistinguishable and expose safe fields only"
     },
     "confirmation_guardrail_pass_rate": {
       "minimum_score": 1.0,
@@ -49,19 +85,38 @@
     },
     "provider_config_contract_pass_rate": {
       "minimum_score": 1.0,
-      "dataset_expectation": "provider selection, missing configuration, and fallback behavior"
+      "dataset_expectation": "provider selection, conditional requirements, auth behavior, and no silent substitution"
     },
     "fixture_immutability_pass_rate": {
       "minimum_score": 1.0,
-      "dataset_expectation": "eval, tests, and demo reset do not mutate data/fixtures"
+      "dataset_expectation": "eval, tests, demo, and reset do not mutate data/fixtures or frozen eval inputs"
+    }
+  },
+  "deferred": {
+    "target_milestone": "v0.2.1",
+    "items": [
+      "optional_llm_analyzer"
+    ],
+    "preserved_target_if_implemented": {
+      "intent_accuracy": {
+        "minimum_score": 0.9,
+        "deterministic_fallback_minimum_score": 0.791667,
+        "baseline_reference_metric": "intent_accuracy"
+      }
     }
   },
   "non_goals": [
+    "external_embeddings",
+    "vector_database",
+    "agent_framework",
+    "model_tool_calling",
     "auth",
     "deployment",
     "multi_tenant",
     "real_customer_data",
     "production_storage",
-    "model_controlled_writes"
+    "model_controlled_writes",
+    "public_ai_counters",
+    "ui_redesign"
   ]
 }

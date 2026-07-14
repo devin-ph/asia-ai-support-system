@@ -1,0 +1,15 @@
+{"id":"v02-route-001","text":"Tạo phiếu hỗ trợ vì đơn ASIA-1001 giao quá chậm.","expected_intent":"ticket_request","expected_route":"ticket","tags":["ticket-over-order-id","mixed-intent"]}
+{"id":"v02-route-002","text":"Tôi muốn mở phiếu về việc đổi trả sản phẩm.","expected_intent":"ticket_request","expected_route":"ticket","tags":["ticket-over-return","mixed-intent"]}
+{"id":"v02-route-003","text":"Tôi muốn khiếu nại về phí giao hàng.","expected_intent":"ticket_request","expected_route":"ticket","tags":["ticket-over-shipping","mixed-intent"]}
+{"id":"v02-route-004","text":"Đơn ASIA-1001 đang ở đâu và chính sách giao hàng thế nào?","expected_intent":"order_lookup","expected_route":"order","tags":["order-id-over-policy","mixed-intent"]}
+{"id":"v02-route-005","text":"ASIA-1002 có được hoàn tiền không?","expected_intent":"order_lookup","expected_route":"order","tags":["order-id-over-return","mixed-intent"]}
+{"id":"v02-route-006","text":"Tra cứu đơn hàng rồi cho tôi biết sản phẩm có bảo hành không.","expected_intent":"order_lookup","expected_route":"order","tags":["order-keyword-over-warranty","mixed-intent"]}
+{"id":"v02-route-007","text":"Tôi muốn đổi trả sản phẩm đang bảo hành.","expected_intent":"return_refund","expected_route":"policy","tags":["return-over-warranty","mixed-intent"]}
+{"id":"v02-route-008","text":"Đổi hàng có mất phí giao hàng không?","expected_intent":"return_refund","expected_route":"policy","tags":["return-over-shipping","mixed-intent"]}
+{"id":"v02-route-009","text":"Bảo hành hay phí giao hàng áp dụng thế nào?","expected_intent":"warranty","expected_route":"policy","tags":["warranty-over-shipping","mixed-intent"]}
+{"id":"v02-route-010","text":"Phí vận chuyển được tính ra sao?","expected_intent":"shipping_policy","expected_route":"policy","tags":["shipping","single-intent"]}
+{"id":"v02-route-011","text":"Chào bạn, hôm nay cửa hàng có gì mới?","expected_intent":"other","expected_route":"other","tags":["other","single-intent"]}
+{"id":"v02-route-012","text":"Create a ticket for order ASIA-1001 please.","expected_intent":"ticket_request","expected_route":"ticket","tags":["ticket-over-order-id","english"]}
+{"id":"v02-route-013","text":"Kiểm tra giúp tôi ASIA 1002.","expected_intent":"order_lookup","expected_route":"order","tags":["explicit-order-id","space-format"]}
+{"id":"v02-route-014","text":"Mã đơn của tôi cần đổi trả vì bị lỗi.","expected_intent":"order_lookup","expected_route":"order","tags":["order-keyword-over-return","mixed-intent"]}
+{"id":"v02-route-015","text":"Tôi muốn đổi hàng vì sản phẩm không phù hợp.","expected_intent":"return_refund","expected_route":"policy","tags":["return","single-intent"]}
