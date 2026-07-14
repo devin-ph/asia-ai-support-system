@@ -24,6 +24,18 @@ def _load_dev_module() -> ModuleType:
 
 DEV = _load_dev_module()
 
+PROVIDER_ENV_EXAMPLE = """\
+ASIA_RESPONSE_GENERATOR=template
+ASIA_LLM_API_KEY=
+ASIA_LLM_MODEL=
+ASIA_LLM_TIMEOUT_SECONDS=15
+"""
+
+
+def _clear_provider_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in DEV.PROVIDER_ENV_KEYS:
+        monkeypatch.delenv(name, raising=False)
+
 
 @pytest.mark.parametrize(
     ("version", "supported"),
@@ -180,53 +192,92 @@ def test_reset_demo_copies_ticket_seed_to_runtime(
     assert "Reset var/demo_tickets.json from data/fixtures/demo_tickets.seed.json" in output
 
 
-def test_empty_env_example_declares_no_required_configuration(
+def test_doctor_accepts_template_mode_without_local_env(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     env_example = tmp_path / ".env.example"
-    env_example.write_text("# No required values.\n", encoding="utf-8")
+    env_example.write_text(PROVIDER_ENV_EXAMPLE, encoding="utf-8")
     monkeypatch.setattr(DEV, "ENV_EXAMPLE", env_example)
     monkeypatch.setattr(DEV, "ENV_FILE", tmp_path / ".env")
+    _clear_provider_environment(monkeypatch)
 
     assert DEV._check_env_configuration() is True
 
 
-def test_env_contract_requires_all_declared_keys(
+def test_doctor_requires_only_settings_for_selected_openai_provider(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     env_example = tmp_path / ".env.example"
     env_file = tmp_path / ".env"
-    env_example.write_text(
-        "PROVIDER_URL=\nPROVIDER_TOKEN=\n",
+    secret = "test-placeholder-secret-value"
+    env_example.write_text(PROVIDER_ENV_EXAMPLE, encoding="utf-8")
+    env_file.write_text(
+        f"ASIA_RESPONSE_GENERATOR=openai\nASIA_LLM_API_KEY={secret}\n",
         encoding="utf-8",
     )
-    env_file.write_text("PROVIDER_URL=http://localhost\n", encoding="utf-8")
     monkeypatch.setattr(DEV, "ENV_EXAMPLE", env_example)
     monkeypatch.setattr(DEV, "ENV_FILE", env_file)
+    _clear_provider_environment(monkeypatch)
 
     assert DEV._check_env_configuration() is False
+    assert "ASIA_LLM_MODEL" in capsys.readouterr().out
 
     env_file.write_text(
-        "PROVIDER_URL=http://localhost\nPROVIDER_TOKEN=local-demo\n",
+        (
+            "ASIA_RESPONSE_GENERATOR=openai\n"
+            f"ASIA_LLM_API_KEY={secret}\n"
+            "ASIA_LLM_MODEL=gpt-5.4-mini-2026-03-17\n"
+            "ASIA_LLM_TIMEOUT_SECONDS=12\n"
+        ),
         encoding="utf-8",
     )
     assert DEV._check_env_configuration() is True
+    assert secret not in capsys.readouterr().out
 
 
-def test_env_contract_rejects_empty_required_values(
+@pytest.mark.parametrize(
+    "local_values",
+    [
+        "ASIA_RESPONSE_GENERATOR=external\n",
+        "ASIA_LLM_TIMEOUT_SECONDS=0\n",
+        "ASIA_LLM_TIMEOUT_SECONDS=not-a-number\n",
+    ],
+)
+def test_doctor_rejects_unknown_provider_and_invalid_timeout(
+    local_values: str,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     env_example = tmp_path / ".env.example"
     env_file = tmp_path / ".env"
-    env_example.write_text("PROVIDER_TOKEN=\n", encoding="utf-8")
-    env_file.write_text("PROVIDER_TOKEN=\n", encoding="utf-8")
+    env_example.write_text(PROVIDER_ENV_EXAMPLE, encoding="utf-8")
+    env_file.write_text(local_values, encoding="utf-8")
     monkeypatch.setattr(DEV, "ENV_EXAMPLE", env_example)
     monkeypatch.setattr(DEV, "ENV_FILE", env_file)
+    _clear_provider_environment(monkeypatch)
 
     assert DEV._check_env_configuration() is False
+
+
+def test_backend_environment_keeps_process_values_over_dotenv(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "ASIA_RESPONSE_GENERATOR=openai\nASIA_LLM_MODEL=file-model\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(DEV, "ENV_FILE", env_file)
+    monkeypatch.setenv("ASIA_LLM_MODEL", "process-model")
+
+    environment = DEV._backend_environment()
+
+    assert environment["ASIA_RESPONSE_GENERATOR"] == "openai"
+    assert environment["ASIA_LLM_MODEL"] == "process-model"
 
 
 def test_runtime_hygiene_rejects_fixture_mutation(

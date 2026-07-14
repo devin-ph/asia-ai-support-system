@@ -11,12 +11,13 @@ The backend preserves the deterministic API contract while implementing the
 ## Architecture
 
 - `app/main.py`: FastAPI construction, middleware, and HTTP route orchestration.
+- `app/config.py`: typed provider settings and conditional startup validation.
 - `app/schemas.py`: public request and response models.
 - `app/intent.py`: deterministic Vietnamese intent and sentiment analysis.
 - `app/order_service.py`: fixed-customer lookup and safe order response shaping.
 - `app/policy_search.py`: keyword search over allowlisted Markdown sections.
-- `app/providers/`: narrow analyzer, policy, order, and ticket contracts plus
-  deterministic adapters.
+- `app/providers/`: narrow analyzer, policy, order, ticket, and async response
+  generation contracts plus their reviewed adapters and factory.
 - `app/state.py`: in-memory actions and counters plus ticket orchestration.
 - `app/storage.py`: validated JSON loading and atomic ticket writes.
 - `app/ticket_service.py`: pending actions and idempotent ticket confirmation.

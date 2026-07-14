@@ -47,6 +47,12 @@ TICKET_SEED = ROOT / "data" / "fixtures" / "demo_tickets.seed.json"
 RUNTIME_TICKETS = RUNTIME_DIR / "demo_tickets.json"
 ENV_FILE = ROOT / ".env"
 ENV_EXAMPLE = ROOT / ".env.example"
+PROVIDER_ENV_KEYS = (
+    "ASIA_RESPONSE_GENERATOR",
+    "ASIA_LLM_API_KEY",
+    "ASIA_LLM_MODEL",
+    "ASIA_LLM_TIMEOUT_SECONDS",
+)
 
 SUPPORTED_NODE_RANGE = "^20.19.0 || ^22.12.0"
 DEFAULT_NODE_MAJOR = 22
@@ -320,6 +326,11 @@ def _check_path(label: str, path: Path, *, required: bool = True) -> bool:
 
 def _check_backend_import() -> bool:
     """Import the actual FastAPI application from the backend directory."""
+    try:
+        environment = _backend_environment()
+    except (OSError, ValueError) as exc:
+        print(f"  {_red(_FAIL)} Could not load backend environment: {exc}")
+        return False
     result = subprocess.run(
         [
             sys.executable,
@@ -327,6 +338,7 @@ def _check_backend_import() -> bool:
             "from app.main import app; assert app is not None",
         ],
         cwd=BACKEND_DIR,
+        env=environment,
         capture_output=True,
         text=True,
         timeout=20,
@@ -436,39 +448,55 @@ def _check_runtime_writable() -> bool:
 
 
 def _check_env_configuration() -> bool:
-    """Check the optional dotenv contract for the current milestone."""
+    """Validate only the settings required by the selected provider."""
     if not ENV_EXAMPLE.exists():
         print(f"  {_red(_FAIL)} .env.example is missing")
         return False
 
     try:
-        expected_values = _load_env_values(ENV_EXAMPLE)
+        values = _load_env_values(ENV_EXAMPLE)
     except (OSError, ValueError) as exc:
         print(f"  {_red(_FAIL)} Could not read .env.example: {exc}")
         return False
 
-    expected_keys = set(expected_values)
-    if not expected_keys:
-        print(f"  {_green(_OK)} .env.example declares no required environment variables")
-        return True
-
-    if not ENV_FILE.exists():
-        print(f"  {_red(_FAIL)} .env is missing required local values")
-        print("    Copy .env.example to .env and fill the required local values.")
+    missing_declarations = sorted(set(PROVIDER_ENV_KEYS) - values.keys())
+    if missing_declarations:
+        print(
+            f"  {_red(_FAIL)} .env.example is missing provider settings: "
+            f"{', '.join(missing_declarations)}"
+        )
         return False
 
+    if ENV_FILE.exists():
+        try:
+            values.update(_load_env_values(ENV_FILE))
+        except (OSError, ValueError) as exc:
+            print(f"  {_red(_FAIL)} Could not read .env: {exc}")
+            return False
+
+    for name in PROVIDER_ENV_KEYS:
+        if name in os.environ:
+            values[name] = os.environ[name]
+
+    backend_path = str(BACKEND_DIR)
+    path_added = backend_path not in sys.path
+    if path_added:
+        sys.path.insert(0, backend_path)
     try:
-        actual_values = _load_env_values(ENV_FILE)
-    except (OSError, ValueError) as exc:
-        print(f"  {_red(_FAIL)} Could not read .env: {exc}")
-        return False
+        from app.config import ProviderConfigurationError, load_settings
 
-    missing_keys = sorted(key for key in expected_keys if not actual_values.get(key))
-    if missing_keys:
-        print(f"  {_red(_FAIL)} .env is missing: {', '.join(missing_keys)}")
+        settings = load_settings(values)
+    except ProviderConfigurationError as exc:
+        print(f"  {_red(_FAIL)} Provider configuration is invalid: {exc}")
         return False
+    finally:
+        if path_added:
+            sys.path.remove(backend_path)
 
-    print(f"  {_green(_OK)} .env satisfies the declared environment contract")
+    print(
+        f"  {_green(_OK)} Provider configuration is valid "
+        f"({settings.response_generator.value}, timeout={settings.llm_timeout_seconds:g}s)"
+    )
     return True
 
 
@@ -493,6 +521,15 @@ def _load_env_values(path: Path) -> dict[str, str]:
     return values
 
 
+def _backend_environment() -> dict[str, str]:
+    """Overlay ignored local dotenv values without overriding process settings."""
+    environment = os.environ.copy()
+    if ENV_FILE.exists():
+        for name, value in _load_env_values(ENV_FILE).items():
+            environment.setdefault(name, value)
+    return environment
+
+
 def cmd_doctor(_args: argparse.Namespace) -> int:
     """Verify that this machine can run the complete local project."""
     print(_bold("Checking full local project readiness...\n"))
@@ -512,6 +549,7 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
         "pytest",
         "httpx",
         "anyio",
+        "openai",
     ):
         results.append(_check_python_module(module))
     results.append(
@@ -531,6 +569,7 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
     results.append(_check_backend_dependency_lock())
     results.append(_check_pip_consistency())
     results.append(_check_path("backend entry", BACKEND_ENTRY, required=True))
+    results.append(_check_env_configuration())
     results.append(_check_backend_import())
 
     print(f"\n{_bold('[Frontend]')}")
@@ -541,7 +580,6 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
 
     print(f"\n{_bold('[Local state]')}")
     results.append(_check_runtime_writable())
-    results.append(_check_env_configuration())
 
     passed = sum(results)
     total = len(results)
@@ -569,6 +607,7 @@ def cmd_backend(_args: argparse.Namespace) -> int:
 
     print(_bold("Starting FastAPI dev server..."))
     try:
+        environment = _backend_environment()
         proc = subprocess.run(
             [
                 sys.executable,
@@ -582,8 +621,12 @@ def cmd_backend(_args: argparse.Namespace) -> int:
                 "8000",
             ],
             cwd=BACKEND_DIR,
+            env=environment,
         )
         return proc.returncode
+    except (OSError, ValueError) as exc:
+        print(_red(f"Error: could not load local environment: {exc}"))
+        return 1
     except KeyboardInterrupt:
         print("\nBackend server stopped.")
         return 0

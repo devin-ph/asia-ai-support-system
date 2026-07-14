@@ -22,14 +22,15 @@ metrics are frozen before feature implementation.
 | Ticket support | Drafts a pending support action in chat | A separate explicit confirmation creates exactly one ticket per action |
 | Admin overview | Shows message, ticket, intent, sentiment, and tool counts | Exposes aggregate counters only, without message or customer content |
 
-The current implementation uses deterministic providers so behavior is
-repeatable. v0.2 adds local policy retrieval and optional grounded generation
-behind the same contracts and guardrails. The optional LLM analyzer is deferred
-to v0.2.1.
+The public demo currently uses deterministic providers so behavior is
+repeatable. v0.2 now has an offline-first runtime boundary for optional grounded
+generation; local evidence retrieval and route integration follow behind the
+same contracts and guardrails. The optional LLM analyzer is deferred to v0.2.1.
 
 ## Technology
 
 - Python 3.10+, FastAPI, Pydantic, Pytest, HTTPX, and Ruff
+- OpenAI Python SDK for the optional Responses API adapter
 - React 19, TypeScript, Vite, Vitest, and Playwright
 - Trusted Markdown policy documents and validated synthetic JSON fixtures
 - Process-local pending actions and counters; ignored local ticket storage
@@ -82,6 +83,25 @@ Check that the local environment satisfies the repository contract.
 ```bash
 python scripts/dev.py doctor
 ```
+
+### Response generator configuration
+
+Template generation is the default and needs neither `.env`, an API key, nor
+network access. To validate the optional OpenAI runtime locally, copy
+`.env.example` to the ignored `.env` file and set:
+
+```dotenv
+ASIA_RESPONSE_GENERATOR=openai
+ASIA_LLM_API_KEY=<local-secret>
+ASIA_LLM_MODEL=gpt-5.4-mini-2026-03-17
+ASIA_LLM_TIMEOUT_SECONDS=15
+```
+
+`doctor` validates only the settings required by the selected generator,
+enforces a timeout greater than 0 and at most 120 seconds, and never prints the
+key. Process environment values take precedence over `.env`. Phase 1 constructs
+this runtime boundary but does not yet call it from the policy route; the public
+demo therefore remains deterministic and offline.
 
 Start the backend in one terminal:
 
@@ -245,19 +265,21 @@ live under [`docs/decisions/`](docs/decisions/README.md).
   tenant isolation.
 - Conversations, pending actions, and aggregate counters are process-local.
 - Confirmed tickets use an ignored local JSON file, not production storage.
-- There is no hosted LLM, vector database, PostgreSQL, queue, cache, Docker
-  setup, cloud deployment, or real commerce integration.
+- The optional OpenAI adapter is not yet connected to the public policy flow.
+  There is no vector database, PostgreSQL, queue, cache, Docker setup, cloud
+  deployment, or real commerce integration.
 - The frontend targets a local demo API and is not a production support client.
 
 ## v0.2 direction
 
 The v0.2 scope, metric definitions, policy corpus, and 86 evaluation cases are
-now frozen. The next engineering decision is to select one concrete grounded
-generation provider through an ADR, then add its validated offline-first
-runtime boundary.
+now frozen. [ADR-005](docs/decisions/005-openai-responses-for-grounded-generation.md)
+selects the OpenAI Responses API as the single optional external generator;
+its validated async runtime boundary is available while template generation
+remains the offline default.
 
-Implementation can then move into local H2 evidence retrieval, followed by
-policy-only grounded generation and application-owned citations. Release work
+The next implementation step is local H2 evidence retrieval, followed by
+policy-only grounded generation with application-owned citations. Release work
 will finish by exercising the existing safety invariants, deterministic mode,
 security checks, and four original E2E flows. These steps do not introduce new
 product flows or broaden model authority.
