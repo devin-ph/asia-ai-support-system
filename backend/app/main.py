@@ -1,15 +1,18 @@
-"""A.S.I.A FastAPI application for the deterministic local demo."""
+"""A.S.I.A FastAPI application with deterministic product behavior."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import Settings, load_settings
 from app.intent import IntentLabel
 from app.providers import (
     ChatProviders,
+    GroundedResponseRuntime,
     default_chat_providers,
 )
+from app.providers.factory import build_response_runtime
 from app.schemas import (
     ActionConfirmRequest,
     ActionConfirmResponse,
@@ -158,8 +161,11 @@ def create_app(
     state: DemoState | None = None,
     *,
     chat_providers: ChatProviders | None = None,
+    settings: Settings | None = None,
+    response_runtime: GroundedResponseRuntime | None = None,
 ) -> FastAPI:
     """Construct an application with fresh injectable in-memory state."""
+    validated_settings = settings or load_settings()
     application = FastAPI(
         title="A.S.I.A - AI Support for Vietnamese E-Commerce",
         version="0.1",
@@ -168,6 +174,10 @@ def create_app(
     )
     application.state.demo_state = state or DemoState()
     application.state.chat_providers = chat_providers or default_chat_providers()
+    application.state.settings = validated_settings
+    application.state.response_runtime = response_runtime or build_response_runtime(
+        validated_settings
+    )
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[

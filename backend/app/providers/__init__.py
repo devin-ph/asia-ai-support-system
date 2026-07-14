@@ -8,6 +8,18 @@ from app.providers.analyzer import (
     AnalyzerProvider,
     DeterministicAnalyzerProvider,
 )
+from app.providers.generation import (
+    GroundedGenerationRequest,
+    GroundedResponseGenerator,
+    GroundedResponseRuntime,
+    GroundingEvidence,
+    OpenAIGroundedResponseGenerator,
+    ProviderAuthenticationError,
+    ProviderMalformedResponseError,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
+    TemplateResponseGenerator,
+)
 from app.providers.orders import FixtureOrdersProvider, OrdersProvider
 from app.providers.policy import KeywordPolicyProvider, PolicyProvider
 
@@ -22,7 +34,7 @@ class ChatProviders:
 
 
 def default_chat_providers() -> ChatProviders:
-    """Build the deterministic provider set used by the v0.1 demo."""
+    """Build the deterministic read providers used by the local demo."""
     return ChatProviders(
         analyzer=DeterministicAnalyzerProvider(),
         policy=KeywordPolicyProvider(),
@@ -35,8 +47,18 @@ __all__ = [
     "ChatProviders",
     "DeterministicAnalyzerProvider",
     "FixtureOrdersProvider",
+    "GroundedGenerationRequest",
+    "GroundedResponseGenerator",
+    "GroundedResponseRuntime",
+    "GroundingEvidence",
     "KeywordPolicyProvider",
+    "OpenAIGroundedResponseGenerator",
     "OrdersProvider",
     "PolicyProvider",
+    "ProviderAuthenticationError",
+    "ProviderMalformedResponseError",
+    "ProviderTimeoutError",
+    "ProviderUnavailableError",
+    "TemplateResponseGenerator",
     "default_chat_providers",
 ]

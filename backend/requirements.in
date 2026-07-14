@@ -2,6 +2,7 @@
 fastapi>=0.115,<1
 uvicorn[standard]>=0.30,<1
 pydantic>=2,<3
+openai>=2.45,<3
 
 # Testing
 pytest>=9,<10
