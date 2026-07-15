@@ -7,7 +7,7 @@ from pathlib import Path
 import httpx
 import pytest
 from app.main import create_app
-from app.policy_search import INSUFFICIENT_CONTEXT_ANSWER
+from app.policy_search import INSUFFICIENT_CONTEXT_ANSWER, search_policy
 from app.providers.generation import (
     GroundedGenerationRequest,
     GroundedResponseRuntime,
@@ -64,6 +64,42 @@ async def test_insufficient_evidence_never_calls_generator() -> None:
     assert result.answer == INSUFFICIENT_CONTEXT_ANSWER
     assert result.citations == ()
     assert generator.calls == []
+
+
+@pytest.mark.anyio
+async def test_unsupported_policy_route_never_calls_generator(tmp_path: Path) -> None:
+    generator = RecordingGenerator()
+    tickets_path = tmp_path / "demo_tickets.json"
+    tickets_path.write_text("[]\n", encoding="utf-8")
+    application = create_app(
+        DemoState(tickets_path=tickets_path),
+        response_runtime=GroundedResponseRuntime(generator),
+    )
+    transport = httpx.ASGITransport(app=application)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/chat",
+            json={"message": "Có chính sách giao nhanh không?"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["intent"] == "shipping_policy"
+    assert response.json()["citations"] == []
+    assert generator.calls == []
+
+
+@pytest.mark.anyio
+async def test_local_retrieval_handles_paraphrase_missed_by_frozen_keyword_baseline() -> None:
+    query = "Chính sách giao hàng cho biết dữ liệu hành trình được tổng hợp từ đâu?"
+    provider = GroundedPolicyProvider(GroundedResponseRuntime(TemplateResponseGenerator()))
+
+    legacy = search_policy(query)
+    result = await provider.answer(query, request_id="req-paraphrase-proof")
+
+    assert legacy.citations == ()
+    assert result.citations[0].source == "docs/policies/shipping_policy.md"
+    assert result.citations[0].section == "Theo dõi hành trình"
 
 
 @pytest.mark.anyio

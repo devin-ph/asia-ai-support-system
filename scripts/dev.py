@@ -766,6 +766,9 @@ def cmd_eval(args: argparse.Namespace) -> int:
         command.append("--json")
     if args.live:
         command.append("--live")
+    curate_reference = getattr(args, "curate_reference", None)
+    if curate_reference is not None:
+        command.extend(("--curate-reference", str(curate_reference)))
     run_options: dict[str, object] = {"cwd": ROOT}
     if args.live:
         run_options["env"] = _backend_environment()
@@ -814,7 +817,7 @@ def _check_runtime_hygiene() -> bool:
     errors: list[str] = []
 
     tracked = subprocess.run(
-        ["git", "ls-files", "--", "var"],
+        ["git", "ls-files", "--", ".env", "var"],
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -822,20 +825,20 @@ def _check_runtime_hygiene() -> bool:
     if tracked.returncode != 0:
         errors.append("Could not inspect tracked runtime files.")
     elif tracked.stdout.strip():
-        errors.append("Files under var/ must not be tracked by Git.")
+        errors.append(".env and files under var/ must not be tracked by Git.")
 
-    ignored = subprocess.run(
-        [
-            "git",
-            "check-ignore",
-            "-q",
-            "--",
-            str(RUNTIME_TICKETS.relative_to(ROOT)),
-        ],
-        cwd=ROOT,
+    ignored_paths = (
+        ".env",
+        str(RUNTIME_TICKETS.relative_to(ROOT)),
+        "var/eval/live-result-release-check.json",
     )
-    if ignored.returncode != 0:
-        errors.append("var/demo_tickets.json is not ignored by Git.")
+    for ignored_path in ignored_paths:
+        ignored = subprocess.run(
+            ["git", "check-ignore", "-q", "--", ignored_path],
+            cwd=ROOT,
+        )
+        if ignored.returncode != 0:
+            errors.append(f"{ignored_path} is not ignored by Git.")
 
     fixture_status = subprocess.run(
         [
@@ -1088,6 +1091,30 @@ def _python_security_commands() -> tuple[tuple[str, list[str]], ...]:
     )
 
 
+def _evaluation_verification_commands() -> tuple[tuple[str, list[str]], ...]:
+    """Return the frozen v0.1 regression and v0.2 offline release gates."""
+    return (
+        (
+            "Deterministic evaluation",
+            [
+                sys.executable,
+                str(EVALUATION_SCRIPT),
+                "--check-baseline",
+                str(EVALUATION_BASELINE),
+            ],
+        ),
+        (
+            "v0.2 offline evaluation",
+            [
+                sys.executable,
+                str(EVALUATION_SCRIPT),
+                "--suite",
+                "v0.2",
+            ],
+        ),
+    )
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
     """Run the complete pre-commit and pre-PR verification suite."""
     print(_bold("Running full project verification..."))
@@ -1126,21 +1153,13 @@ def cmd_verify(args: argparse.Namespace) -> int:
             ),
         )
     )
-    results.append(
-        (
-            "Deterministic evaluation",
-            _run_verification_command(
-                "Deterministic evaluation",
-                [
-                    sys.executable,
-                    str(EVALUATION_SCRIPT),
-                    "--check-baseline",
-                    str(EVALUATION_BASELINE),
-                ],
-                cwd=ROOT,
-            ),
+    for label, command in _evaluation_verification_commands():
+        results.append(
+            (
+                label,
+                _run_verification_command(label, command, cwd=ROOT),
+            )
         )
-    )
 
     npm = _npm_command()
     if npm is None:
@@ -1234,6 +1253,12 @@ def main() -> int:
         "--live",
         action="store_true",
         help="Run the selected external v0.2 generator and write an ignored result artifact",
+    )
+    eval_parser.add_argument(
+        "--curate-reference",
+        type=Path,
+        metavar="LIVE_RESULT",
+        help="Validate a human-scored live result and write eval/results/v0.2-reference.json",
     )
     verify_parser = sub.add_parser("verify", help="Run full pre-commit verification")
     verify_parser.add_argument(

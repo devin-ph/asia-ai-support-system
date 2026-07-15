@@ -310,6 +310,42 @@ def test_runtime_hygiene_rejects_fixture_mutation(
     assert DEV._check_runtime_hygiene() is False
 
 
+def test_runtime_hygiene_checks_env_runtime_and_live_results_are_ignored(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed_path = tmp_path / "data" / "fixtures" / "demo_tickets.seed.json"
+    seed_path.parent.mkdir(parents=True)
+    seed_path.write_text("[]\n", encoding="utf-8")
+    monkeypatch.setattr(DEV, "ROOT", tmp_path)
+    monkeypatch.setattr(DEV, "TICKET_SEED", seed_path)
+    monkeypatch.setattr(DEV, "RUNTIME_TICKETS", tmp_path / "var" / "demo_tickets.json")
+    checked_ignored_paths: list[str] = []
+
+    def git_result(
+        command: list[str],
+        **_kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        if command[1] == "ls-files":
+            assert command[-2:] == [".env", "var"]
+            return subprocess.CompletedProcess(command, 0, "", "")
+        if command[1] == "check-ignore":
+            checked_ignored_paths.append(command[-1])
+            return subprocess.CompletedProcess(command, 0, "", "")
+        if command[1] == "status":
+            return subprocess.CompletedProcess(command, 0, "", "")
+        raise AssertionError(f"Unexpected command: {command}")
+
+    monkeypatch.setattr(DEV.subprocess, "run", git_result)
+
+    assert DEV._check_runtime_hygiene() is True
+    assert checked_ignored_paths == [
+        ".env",
+        str(Path("var") / "demo_tickets.json"),
+        "var/eval/live-result-release-check.json",
+    ]
+
+
 def test_requirement_lock_accepts_only_exact_pins(tmp_path: Path) -> None:
     lock_path = tmp_path / "requirements.txt"
     lock_path.write_text(
@@ -413,6 +449,42 @@ def test_live_eval_forwards_flag_and_backend_environment(
     assert captured["env"] is environment
 
 
+def test_reference_curation_forwards_reviewed_live_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    live_result = tmp_path / "live-result-reviewed.json"
+    captured: dict[str, object] = {}
+
+    def run_evaluation(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured["command"] = command
+        captured.update(kwargs)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(DEV.subprocess, "run", run_evaluation)
+
+    assert (
+        DEV.cmd_eval(
+            Namespace(
+                suite="v0.2",
+                json=False,
+                live=False,
+                curate_reference=live_result,
+            )
+        )
+        == 0
+    )
+    assert captured["command"] == [
+        DEV.sys.executable,
+        str(DEV.EVALUATION_SCRIPT),
+        "--suite",
+        "v0.2",
+        "--curate-reference",
+        str(live_result),
+    ]
+    assert "env" not in captured
+
+
 def test_python_quality_gates_use_active_interpreter() -> None:
     assert DEV._python_quality_commands() == (
         (
@@ -451,6 +523,29 @@ def test_python_security_gate_uses_active_interpreter_and_locked_requirements() 
                 "pip_audit",
                 "-r",
                 "backend/requirements.txt",
+            ],
+        ),
+    )
+
+
+def test_verify_runs_frozen_v01_and_v02_evaluation_gates() -> None:
+    assert DEV._evaluation_verification_commands() == (
+        (
+            "Deterministic evaluation",
+            [
+                DEV.sys.executable,
+                str(DEV.EVALUATION_SCRIPT),
+                "--check-baseline",
+                str(DEV.EVALUATION_BASELINE),
+            ],
+        ),
+        (
+            "v0.2 offline evaluation",
+            [
+                DEV.sys.executable,
+                str(DEV.EVALUATION_SCRIPT),
+                "--suite",
+                "v0.2",
             ],
         ),
     )

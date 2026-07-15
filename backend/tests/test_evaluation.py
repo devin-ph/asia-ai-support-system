@@ -257,6 +257,88 @@ def test_live_result_artifact_contains_provenance_without_raw_content() -> None:
     assert fallback_artifact["automated_gate_passed"] is False
 
 
+def test_curated_reference_requires_human_scores_and_strips_answer_text() -> None:
+    datasets = EVALUATION.load_v02_datasets()
+    metrics, outcomes = EVALUATION.evaluate_v02_generation(datasets["grounded_generation"])
+    live_artifact = EVALUATION.build_live_result_artifact(
+        provider="openai",
+        model="test-model-snapshot",
+        prompt_version="grounded-policy-v2",
+        timeout_seconds=15.0,
+        duration_ms=2100.0,
+        metrics=metrics,
+        outcomes=outcomes,
+        generated_at=datetime(2026, 7, 15, 1, 2, 3, tzinfo=UTC),
+    )
+    for case in live_artifact["cases"]:
+        case["answer_text"] = "Local answer retained only before curation."
+        case["human_score"] = 2
+
+    curated = EVALUATION.build_curated_reference(
+        live_artifact,
+        curated_at=datetime(2026, 7, 15, 2, 3, 4, tzinfo=UTC),
+    )
+
+    EVALUATION.validate_curated_reference(curated)
+    assert curated["artifact_type"] == "v0.2-grounded-generation-reference"
+    assert curated["curated_at"] == "2026-07-15T02:03:04+00:00"
+    assert curated["metrics"]["grounded_response_pass_rate"] == {
+        "score": 1.0,
+        "passed": 21,
+        "total": 21,
+        "minimum": 0.95,
+        "target_met": True,
+    }
+    assert curated["human_review"]["status"] == "complete"
+    assert all("answer_text" not in case for case in curated["cases"])
+
+
+def test_curated_reference_rejects_unreviewed_or_fallback_run() -> None:
+    datasets = EVALUATION.load_v02_datasets()
+    metrics, outcomes = EVALUATION.evaluate_v02_generation(datasets["grounded_generation"])
+    live_artifact = EVALUATION.build_live_result_artifact(
+        provider="openai",
+        model="test-model-snapshot",
+        prompt_version="grounded-policy-v2",
+        timeout_seconds=15.0,
+        duration_ms=2100.0,
+        metrics=metrics,
+        outcomes=outcomes,
+    )
+
+    with pytest.raises(EVALUATION.EvaluationDataError, match="human_score"):
+        EVALUATION.build_curated_reference(live_artifact)
+
+    live_artifact["fallbacks"] = {"total": 1, "by_reason": {"timeout": 1}}
+    with pytest.raises(EVALUATION.EvaluationDataError, match="zero provider fallbacks"):
+        EVALUATION.build_curated_reference(live_artifact)
+
+
+def test_curated_reference_rejects_tampered_metrics_or_provenance() -> None:
+    datasets = EVALUATION.load_v02_datasets()
+    metrics, outcomes = EVALUATION.evaluate_v02_generation(datasets["grounded_generation"])
+    live_artifact = EVALUATION.build_live_result_artifact(
+        provider="openai",
+        model="test-model-snapshot",
+        prompt_version="grounded-policy-v2",
+        timeout_seconds=15.0,
+        duration_ms=2100.0,
+        metrics=metrics,
+        outcomes=outcomes,
+    )
+    for case in live_artifact["cases"]:
+        case["human_score"] = 2
+
+    live_artifact["metrics"]["citation_validity_rate"]["passed"] = 20
+    with pytest.raises(EVALUATION.EvaluationDataError, match="does not match case outcomes"):
+        EVALUATION.build_curated_reference(live_artifact)
+
+    live_artifact["metrics"]["citation_validity_rate"]["passed"] = 21
+    live_artifact["parameters"]["raw_prompt"] = "must not be curated"
+    with pytest.raises(EVALUATION.EvaluationDataError, match="versioned provenance fields"):
+        EVALUATION.build_curated_reference(live_artifact)
+
+
 def test_live_run_requires_explicit_external_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

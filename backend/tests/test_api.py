@@ -362,10 +362,25 @@ async def test_cors_allows_only_local_frontend(
     assert "access-control-allow-origin" not in denied.headers
 
 
-def test_synthetic_order_storage_contains_required_demo_ids() -> None:
+def test_repository_order_fixture_is_synthetic_and_schema_bounded() -> None:
     orders = load_orders()
     assert {order.order_id for order in orders} >= {
         "ASIA-1001",
         "ASIA-1002",
         "ASIA-9999",
     }
+    assert all(order.owner_customer_id.startswith("demo-customer-") for order in orders)
+    assert all("Demo" in order.carrier for order in orders)
+    assert all(
+        set(order.model_dump())
+        == {
+            "order_id",
+            "owner_customer_id",
+            "status",
+            "carrier",
+            "estimated_delivery",
+            "items_count",
+            "last_updated",
+        }
+        for order in orders
+    )

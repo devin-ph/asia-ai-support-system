@@ -23,8 +23,30 @@ EVAL_DIR = ROOT / "eval"
 DEFAULT_BASELINE = EVAL_DIR / "baseline.v0.1.json"
 V02_TARGET = EVAL_DIR / "baseline.v0.2.target.json"
 V02_MANIFEST = EVAL_DIR / "v0.2" / "manifest.json"
+V02_REFERENCE = EVAL_DIR / "results" / "v0.2-reference.json"
+V02_LIVE_RESULTS_DIR = ROOT / "var" / "eval"
 _NUMBER_PATTERN = re.compile(r"(?<!\w)\d+(?:[.,]\d+)?(?!\w)")
 _EVAL_SEPARATOR_PATTERN = re.compile(r"[^a-z0-9]+")
+
+_CURATED_CASE_FIELDS = (
+    "id",
+    "automated_pass",
+    "required_claims_pass",
+    "forbidden_claims_pass",
+    "numeric_claims_pass",
+    "citation_coverage_pass",
+    "citation_validity_pass",
+    "fallback_reason",
+    "human_score",
+)
+_CURATED_PARAMETER_FIELDS = (
+    "timeout_seconds",
+    "case_count",
+    "evidence_limit",
+    "store",
+    "max_retries",
+)
+_CURATED_LATENCY_FIELDS = ("total_ms", "average_ms")
 
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -737,14 +759,20 @@ def build_v02_contract_report() -> dict[str, Any]:
             f"{automated_groundedness.score:.6f} is below pre-review minimum "
             f"{groundedness_minimum:.6f}: " + "; ".join(automated_groundedness.failures)
         )
+    reference = load_committed_v02_reference()
+    reference_complete = reference is not None
     return {
         "suite_id": "v0.2-evaluation-contract",
         "evaluator_schema_version": 4,
         "status": "offline_generation_gate_passed",
         "feature_metrics_status": (
-            "retrieval_and_offline_generation_measured_human_review_pending"
+            "release_metrics_complete"
+            if reference_complete
+            else "retrieval_and_offline_generation_measured_human_review_pending"
         ),
-        "human_reference_review_status": "pending_external_reference_run",
+        "human_reference_review_status": (
+            "complete" if reference_complete else "pending_external_reference_run"
+        ),
         "dataset_hash": compute_v02_dataset_hash(),
         "policy_corpus_hash": compute_policy_corpus_hash(),
         "datasets": {
@@ -763,6 +791,7 @@ def build_v02_contract_report() -> dict[str, Any]:
             "policy_allowlist_and_corpus_locked": True,
             "target_hash_matches": True,
             "v0.1_datasets_unchanged": True,
+            "reference_artifact": "valid" if reference_complete else "not_committed",
             "routing_precedence_contract": routing.snapshot(),
         },
         "retrieval_config": {
@@ -790,12 +819,27 @@ def build_v02_contract_report() -> dict[str, Any]:
         "feature_metrics": {
             name: _metric_report(result) for name, result in measured_metrics.items()
         },
-        "pending_metrics": {
-            "grounded_response_pass_rate": {
-                "status": "pending_live_human_reference_review",
-                "minimum_score": groundedness_minimum,
+        "pending_metrics": (
+            {}
+            if reference_complete
+            else {
+                "grounded_response_pass_rate": {
+                    "status": "pending_live_human_reference_review",
+                    "minimum_score": groundedness_minimum,
+                }
             }
-        },
+        ),
+        "reference": (
+            {
+                "path": V02_REFERENCE.relative_to(ROOT).as_posix(),
+                "provider": reference["provider"],
+                "model": reference["model"],
+                "prompt_version": reference["prompt_version"],
+                "grounded_response_pass_rate": reference["metrics"]["grounded_response_pass_rate"],
+            }
+            if reference is not None
+            else None
+        ),
         "generation_cases": list(generation_cases),
     }
 
@@ -913,7 +957,328 @@ def build_live_result_artifact(
 
 def _next_live_result_path() -> Path:
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
-    return ROOT / "var" / "eval" / f"live-result-{timestamp}.json"
+    return V02_LIVE_RESULTS_DIR / f"live-result-{timestamp}.json"
+
+
+def _artifact_metric_score(artifact: dict[str, Any], name: str) -> float:
+    metrics = artifact.get("metrics")
+    metric = metrics.get(name) if isinstance(metrics, dict) else None
+    score = metric.get("score") if isinstance(metric, dict) else None
+    if isinstance(score, bool) or not isinstance(score, int | float):
+        raise EvaluationDataError(f"live result metric {name!r} must contain a numeric score")
+    return float(score)
+
+
+def _validate_case_metric_consistency(
+    artifact: dict[str, Any],
+    cases: list[dict[str, Any]],
+) -> None:
+    metric_flags = {
+        "automated_grounded_response_pass_rate": "automated_pass",
+        "citation_coverage_rate": "citation_coverage_pass",
+        "citation_validity_rate": "citation_validity_pass",
+    }
+    metrics = artifact.get("metrics")
+    if not isinstance(metrics, dict):
+        raise EvaluationDataError("reference metrics must be an object")
+
+    for case in cases:
+        expected_automated = all(
+            case[field]
+            for field in (
+                "required_claims_pass",
+                "forbidden_claims_pass",
+                "numeric_claims_pass",
+            )
+        )
+        if case["automated_pass"] is not expected_automated:
+            raise EvaluationDataError(
+                f"{case['id']}: automated_pass disagrees with the claim checks"
+            )
+        if case["citation_validity_pass"] and not case["citation_coverage_pass"]:
+            raise EvaluationDataError(
+                f"{case['id']}: citation validity cannot pass without coverage"
+            )
+
+    for name, flag in metric_flags.items():
+        metric = metrics.get(name)
+        if not isinstance(metric, dict):
+            raise EvaluationDataError(f"reference metric {name!r} must be an object")
+        passed = sum(case[flag] for case in cases)
+        total = len(cases)
+        score = round(passed / total, 6) if total else 0.0
+        if (
+            metric.get("passed") != passed
+            or metric.get("total") != total
+            or metric.get("score") != score
+        ):
+            raise EvaluationDataError(f"reference metric {name!r} does not match case outcomes")
+
+
+def _curated_metadata_fields(
+    live_artifact: dict[str, Any],
+    name: str,
+    allowed_fields: tuple[str, ...],
+) -> dict[str, Any]:
+    value = live_artifact.get(name)
+    if not isinstance(value, dict) or set(value) != set(allowed_fields):
+        raise EvaluationDataError(
+            f"live result {name} must contain only the versioned provenance fields"
+        )
+    return {field: value[field] for field in allowed_fields}
+
+
+def _validate_reference_provenance(
+    artifact: dict[str, Any],
+    *,
+    artifact_type: str,
+) -> None:
+    if artifact.get("schema_version") != 1:
+        raise EvaluationDataError("reference artifact schema_version must be 1")
+    if artifact.get("artifact_type") != artifact_type:
+        raise EvaluationDataError(f"reference artifact_type must be {artifact_type!r}")
+    if artifact.get("provider") != "openai":
+        raise EvaluationDataError("v0.2 reference provider must be openai")
+    if not isinstance(artifact.get("model"), str) or not artifact["model"].strip():
+        raise EvaluationDataError("v0.2 reference model must be a non-empty string")
+    if artifact.get("prompt_version") != TemplateResponseGenerator.prompt_version:
+        raise EvaluationDataError("v0.2 reference prompt version is not current")
+    if artifact.get("corpus_hash") != compute_policy_corpus_hash():
+        raise EvaluationDataError("v0.2 reference policy corpus hash is stale")
+    if artifact.get("dataset_hash") != compute_v02_dataset_hash():
+        raise EvaluationDataError("v0.2 reference dataset hash is stale")
+    if artifact.get("fallbacks") != {"total": 0, "by_reason": {}}:
+        raise EvaluationDataError("v0.2 reference must contain zero provider fallbacks")
+
+
+def build_curated_reference(
+    live_artifact: dict[str, Any],
+    *,
+    curated_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Validate a human-scored live run and remove local answer text."""
+    _validate_reference_provenance(
+        live_artifact,
+        artifact_type="v0.2-grounded-generation-live-result",
+    )
+    if live_artifact.get("automated_gate_passed") is not True:
+        raise EvaluationDataError("live result did not pass the automated release gate")
+
+    metric_requirements = {
+        "automated_grounded_response_pass_rate": V02_LOCKED_MINIMUMS["grounded_response_pass_rate"],
+        "citation_coverage_rate": V02_LOCKED_MINIMUMS["citation_coverage_rate"],
+        "citation_validity_rate": V02_LOCKED_MINIMUMS["citation_validity_rate"],
+    }
+    for name, minimum in metric_requirements.items():
+        if _artifact_metric_score(live_artifact, name) < minimum:
+            raise EvaluationDataError(f"live result metric {name!r} is below {minimum:.6f}")
+
+    datasets = load_v02_datasets()
+    validate_v02_target_contract(datasets)
+    expected_ids = tuple(case["id"] for case in datasets["grounded_generation"])
+    raw_cases = live_artifact.get("cases")
+    if not isinstance(raw_cases, list):
+        raise EvaluationDataError("live result cases must be a list")
+
+    cases_by_id: dict[str, dict[str, Any]] = {}
+    for case in raw_cases:
+        if not isinstance(case, dict):
+            raise EvaluationDataError("live result cases must contain objects")
+        case_id = case.get("id")
+        if not isinstance(case_id, str) or not case_id:
+            raise EvaluationDataError("live result case id must be a non-empty string")
+        if case_id in cases_by_id:
+            raise EvaluationDataError(f"duplicate live result case id: {case_id}")
+        cases_by_id[case_id] = case
+    if set(cases_by_id) != set(expected_ids):
+        raise EvaluationDataError("live result case IDs differ from the frozen generation dataset")
+
+    curated_cases: list[dict[str, Any]] = []
+    passed = 0
+    flag_fields = _CURATED_CASE_FIELDS[1:7]
+    for case_id in expected_ids:
+        case = cases_by_id[case_id]
+        if not all(isinstance(case.get(field), bool) for field in flag_fields):
+            raise EvaluationDataError(f"{case_id}: automated result flags must be booleans")
+        if case.get("fallback_reason") is not None:
+            raise EvaluationDataError(f"{case_id}: fallback runs cannot be curated")
+        human_score = case.get("human_score")
+        if (
+            isinstance(human_score, bool)
+            or not isinstance(human_score, int)
+            or human_score not in {0, 1, 2}
+        ):
+            raise EvaluationDataError(f"{case_id}: human_score must be 0, 1, or 2")
+        if case["automated_pass"] and human_score == 2:
+            passed += 1
+        curated_cases.append({field: case.get(field) for field in _CURATED_CASE_FIELDS})
+
+    _validate_case_metric_consistency(live_artifact, curated_cases)
+    parameters = _curated_metadata_fields(
+        live_artifact,
+        "parameters",
+        _CURATED_PARAMETER_FIELDS,
+    )
+    latency_summary = _curated_metadata_fields(
+        live_artifact,
+        "latency_summary",
+        _CURATED_LATENCY_FIELDS,
+    )
+
+    total = len(curated_cases)
+    final_score = passed / total if total else 0.0
+    minimum = V02_LOCKED_MINIMUMS["grounded_response_pass_rate"]
+    if final_score < minimum:
+        raise EvaluationDataError(
+            f"grounded_response_pass_rate={final_score:.6f} is below {minimum:.6f}"
+        )
+
+    timestamp = curated_at or datetime.now(UTC)
+    source_metrics = live_artifact["metrics"]
+    return {
+        "schema_version": 1,
+        "artifact_type": "v0.2-grounded-generation-reference",
+        "release": "v0.2.0",
+        "source_created_at": live_artifact.get("created_at"),
+        "curated_at": timestamp.astimezone(UTC).isoformat(),
+        "provider": live_artifact["provider"],
+        "model": live_artifact["model"],
+        "prompt_version": live_artifact["prompt_version"],
+        "corpus_hash": live_artifact["corpus_hash"],
+        "dataset_hash": live_artifact["dataset_hash"],
+        "parameters": parameters,
+        "latency_summary": latency_summary,
+        "metrics": {name: source_metrics[name] for name in metric_requirements}
+        | {
+            "grounded_response_pass_rate": {
+                "score": round(final_score, 6),
+                "passed": passed,
+                "total": total,
+                "minimum": minimum,
+                "target_met": True,
+            }
+        },
+        "fallbacks": {"total": 0, "by_reason": {}},
+        "human_review": {
+            "status": "complete",
+            "rubric": "0=unsafe-or-unsupported, 1=partial, 2=fully-grounded",
+            "reviewed_cases": total,
+            "required_cases": total,
+        },
+        "known_limitations": [
+            "Single-turn Vietnamese policy benchmark over three synthetic Markdown files.",
+            "Human scores demonstrate the frozen 21-case set, not universal groundedness.",
+            "Order, ticket, and admin flows remain deterministic and outside the generator.",
+        ],
+        "cases": curated_cases,
+    }
+
+
+def validate_curated_reference(reference: dict[str, Any]) -> None:
+    """Reject stale, incomplete, or content-bearing committed references."""
+    _validate_reference_provenance(
+        reference,
+        artifact_type="v0.2-grounded-generation-reference",
+    )
+    human_review = reference.get("human_review")
+    if not isinstance(human_review, dict) or human_review.get("status") != "complete":
+        raise EvaluationDataError("curated reference human review must be complete")
+    if reference.get("release") != "v0.2.0":
+        raise EvaluationDataError("curated reference release must be v0.2.0")
+    for name, minimum in (
+        ("citation_coverage_rate", V02_LOCKED_MINIMUMS["citation_coverage_rate"]),
+        ("citation_validity_rate", V02_LOCKED_MINIMUMS["citation_validity_rate"]),
+        ("grounded_response_pass_rate", V02_LOCKED_MINIMUMS["grounded_response_pass_rate"]),
+    ):
+        if _artifact_metric_score(reference, name) < minimum:
+            raise EvaluationDataError(f"curated reference metric {name!r} is below target")
+
+    cases = reference.get("cases")
+    if not isinstance(cases, list) or len(cases) != V02_EXPECTED_CASE_COUNTS["grounded_generation"]:
+        raise EvaluationDataError("curated reference must contain all grounded-generation cases")
+    expected_ids = {case["id"] for case in load_v02_datasets()["grounded_generation"]}
+    actual_ids: set[str] = set()
+    passed = 0
+    flag_fields = _CURATED_CASE_FIELDS[1:7]
+    for case in cases:
+        if not isinstance(case, dict) or set(case) != set(_CURATED_CASE_FIELDS):
+            raise EvaluationDataError("curated reference cases must use the release schema")
+        case_id = case.get("id")
+        if not isinstance(case_id, str) or case_id in actual_ids:
+            raise EvaluationDataError("curated reference case IDs must be unique strings")
+        actual_ids.add(case_id)
+        if not all(isinstance(case.get(field), bool) for field in flag_fields):
+            raise EvaluationDataError(f"{case_id}: curated automated flags must be booleans")
+        human_score = case.get("human_score")
+        if (
+            isinstance(human_score, bool)
+            or not isinstance(human_score, int)
+            or human_score not in {0, 1, 2}
+        ):
+            raise EvaluationDataError(f"{case_id}: curated human_score must be 0, 1, or 2")
+        if case.get("fallback_reason") is not None:
+            raise EvaluationDataError(f"{case_id}: curated reference cannot contain a fallback")
+        if case["automated_pass"] and human_score == 2:
+            passed += 1
+    if actual_ids != expected_ids:
+        raise EvaluationDataError("curated reference case IDs differ from the frozen dataset")
+    if human_review.get("reviewed_cases") != len(cases) or human_review.get(
+        "required_cases"
+    ) != len(cases):
+        raise EvaluationDataError("curated reference human-review counts are incomplete")
+
+    _validate_case_metric_consistency(reference, cases)
+
+    final_metric = reference["metrics"]["grounded_response_pass_rate"]
+    expected_score = round(passed / len(cases), 6)
+    if (
+        final_metric.get("passed") != passed
+        or final_metric.get("total") != len(cases)
+        or final_metric.get("score") != expected_score
+        or final_metric.get("target_met") is not True
+    ):
+        raise EvaluationDataError("curated grounded-response metric does not match case scores")
+
+
+def load_committed_v02_reference() -> dict[str, Any] | None:
+    """Load and validate the curated reference when one has been committed."""
+    if not V02_REFERENCE.is_file():
+        return None
+    try:
+        reference = json.loads(V02_REFERENCE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise EvaluationDataError(f"Invalid committed v0.2 reference: {exc}") from exc
+    if not isinstance(reference, dict):
+        raise EvaluationDataError("committed v0.2 reference must be a JSON object")
+    validate_curated_reference(reference)
+    return reference
+
+
+def curate_v02_reference(live_result_path: Path) -> tuple[dict[str, Any], Path]:
+    """Promote one reviewed ignored live result to the fixed release path."""
+    candidate = live_result_path if live_result_path.is_absolute() else ROOT / live_result_path
+    resolved = candidate.resolve()
+    try:
+        resolved.relative_to(V02_LIVE_RESULTS_DIR.resolve())
+    except ValueError as exc:
+        raise EvaluationDataError("live result must be under var/eval/") from exc
+    if not resolved.name.startswith("live-result-") or resolved.suffix != ".json":
+        raise EvaluationDataError("live result filename must match live-result-*.json")
+    try:
+        live_artifact = json.loads(resolved.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise EvaluationDataError(f"Invalid live result: {exc}") from exc
+    if not isinstance(live_artifact, dict):
+        raise EvaluationDataError("live result must be a JSON object")
+
+    curated = build_curated_reference(live_artifact)
+    validate_curated_reference(curated)
+    V02_REFERENCE.parent.mkdir(parents=True, exist_ok=True)
+    V02_REFERENCE.write_text(
+        json.dumps(curated, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return curated, V02_REFERENCE
 
 
 def evaluate_intents(cases: tuple[dict[str, Any], ...]) -> MetricResult:
@@ -1218,6 +1583,12 @@ def main() -> int:
         help="Run the explicitly configured external v0.2 generator and write var/eval output",
     )
     parser.add_argument(
+        "--curate-reference",
+        type=Path,
+        metavar="LIVE_RESULT",
+        help="Validate a reviewed var/eval live result and write the fixed v0.2 reference",
+    )
+    parser.add_argument(
         "--check-baseline",
         type=Path,
         metavar="PATH",
@@ -1229,8 +1600,31 @@ def main() -> int:
         parser.error("--check-baseline applies only to the v0.1 measured baseline")
     if args.live and args.suite != "v0.2":
         parser.error("--live applies only to --suite v0.2")
+    if args.curate_reference is not None and args.suite != "v0.2":
+        parser.error("--curate-reference applies only to --suite v0.2")
+    if args.live and args.curate_reference is not None:
+        parser.error("--live and --curate-reference are mutually exclusive")
+    if args.curate_reference is not None and args.check_baseline is not None:
+        parser.error("--curate-reference cannot be combined with --check-baseline")
 
     if args.suite == "v0.2":
+        if args.curate_reference is not None:
+            try:
+                artifact, output_path = curate_v02_reference(args.curate_reference)
+            except EvaluationDataError as exc:
+                print(f"Reference curation error: {exc}", file=sys.stderr)
+                return 2
+            if args.json:
+                print(json.dumps(artifact, ensure_ascii=False, indent=2))
+            else:
+                metric = artifact["metrics"]["grounded_response_pass_rate"]
+                print("A.S.I.A v0.2 curated grounded-generation reference\n")
+                print(f"provider: {artifact['provider']}")
+                print(f"model: {artifact['model']}")
+                print(f"prompt version: {artifact['prompt_version']}")
+                print(f"grounded response pass rate: {metric['passed']}/{metric['total']}")
+                print(f"artifact: {output_path.relative_to(ROOT)}")
+            return 0
         if args.live:
             try:
                 artifact, output_path = run_v02_live_generation()
