@@ -229,3 +229,5 @@ v0.2.0 is done when:
 - `python scripts/dev.py doctor`, `python scripts/dev.py verify`, release
   security checks, and Playwright pass at their documented gates.
 - README, evaluation docs, ADRs, and examples match implemented behavior.
+- `docs/releases/v0.2.0.md` maps all invariants to executable evidence and
+  records release-gate status without redefining this contract.

@@ -19,6 +19,9 @@ python scripts/dev.py eval --suite v0.2
 # Explicit paid/network run using the selected OpenAI configuration.
 python scripts/dev.py eval --suite v0.2 --live
 
+# After human scoring, validate and promote one ignored live result.
+python scripts/dev.py eval --suite v0.2 --curate-reference var/eval/live-result-....json
+
 # Machine-readable reports.
 python scripts/dev.py eval --suite v0.1 --json
 python scripts/dev.py eval --suite v0.2 --json
@@ -29,8 +32,9 @@ routing labels, then measures retrieval, automated groundedness, citation
 coverage, and citation validity with the offline template generator. It never
 calls a network. `--live` is the only evaluation path that invokes the selected
 external generator and writes an ignored review artifact. The default eval
-command and `python scripts/dev.py verify` keep checking the exact v0.1
-snapshot; run the v0.2 command explicitly for its phase gate.
+command checks the exact v0.1 snapshot. The release-oriented
+`python scripts/dev.py verify` checks both that snapshot and the v0.2 offline
+gate; use `--live` only for the explicit external reference run.
 
 ## Frozen v0.1 baseline
 
@@ -256,11 +260,14 @@ fallback categories, and provider/model/prompt/corpus/dataset/parameter/latency
 provenance. They never contain raw prompts, unredacted queries, secrets,
 chain-of-thought, order data, ticket data, admin state, or application logs.
 
-After a reviewer scores all 21 cases, a curated release reference may be
-committed as `eval/results/v0.2-reference.json`. The curated file must remove
-local `answer_text`, retain scores and provenance, have zero fallbacks, and meet
-the locked 0.95 final grounded-response gate. No reference file is committed
-before a genuine external run and human review exist.
+After a reviewer assigns `human_score` 0, 1, or 2 to all 21 cases, run the
+documented `--curate-reference` command. It accepts only `live-result-*.json`
+under `var/eval/`, validates provider/model/prompt and current corpus/dataset
+hashes, rejects fallback or incomplete runs, recomputes the final score, and
+writes `eval/results/v0.2-reference.json` without local `answer_text`. The
+regular v0.2 evaluator validates that committed reference on every subsequent
+run. No reference file is created before a genuine external run and human
+review exist.
 
 ## Change control
 

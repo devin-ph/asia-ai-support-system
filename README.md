@@ -133,14 +133,15 @@ Run project commands from the repository root.
 | `python scripts/dev.py eval` | Measure the frozen deterministic v0.1 baseline |
 | `python scripts/dev.py eval --suite v0.2` | Run frozen v0.2 retrieval, groundedness, citation, and routing gates offline |
 | `python scripts/dev.py eval --suite v0.2 --live` | Explicitly run the configured external generator and write an ignored review artifact |
+| `python scripts/dev.py eval --suite v0.2 --curate-reference <live-result>` | Validate a human-scored live run and write the fixed release reference |
 | `python scripts/dev.py verify` | Run the full pre-commit verification gate |
 | `python scripts/dev.py verify --security` | Add a vulnerability audit of locked Python dependencies |
 
-`verify` covers Python lint and formatting, backend and frontend tests, baseline
-drift, TypeScript checks, the production frontend build, fixture/runtime
-hygiene, obvious secret assignments, and Git whitespace errors. CI runs the
-security variant from clean checkouts; local `verify` is the fastest complete
-feedback loop.
+`verify` covers Python lint and formatting, backend and frontend tests, the
+frozen v0.1 regression, v0.2 offline gates, TypeScript checks, the production
+frontend build, fixture/runtime hygiene, obvious secret assignments, and Git
+whitespace errors. CI runs the security variant from clean checkouts; local
+`verify` is the fastest complete feedback loop.
 
 Run browser E2E coverage for the four demo flows with:
 
@@ -186,16 +187,15 @@ verification result.
 
 ## Demo walkthrough
 
-Start both servers, open the frontend, and use these scenarios.
+Start both servers, open the frontend, and use this short release walkthrough.
 
-| Scenario | Vietnamese message or action | Expected result |
+| Proof | Message, action, or command | Expected result |
 | --- | --- | --- |
-| Grounded policy | `Chính sách đổi trả áp dụng trong bao lâu?` | Answer from the return policy with title, source, and section citation |
-| Unsupported policy | `Cửa hàng có chương trình tích điểm không?` | Insufficient-context response with no citations |
-| Owned order | `Tra cứu đơn hàng ASIA-1001 giúp tôi` | Compact order summary containing safe fields only |
-| Protected order | Look up `ASIA-9999` or an unknown ID | The same generic not-found response in both cases |
-| Ticket confirmation | `Tôi muốn tạo phiếu hỗ trợ vì sản phẩm bị lỗi` | Pending action first; confirm creates one ticket, cancel creates none |
-| Admin overview | Open the admin panel after the previous steps | Aggregate intent, sentiment, message, ticket, and tool counts update without exposing content |
+| Retrieval beyond v0.1 keywords | `Chính sách giao hàng cho biết dữ liệu hành trình được tổng hợp từ đâu?` | Local retrieval finds `Theo dõi hành trình`; the frozen keyword search does not |
+| Unsupported policy | `Có chính sách giao nhanh không?` | Insufficient context, no citation, and no generator call |
+| Grounded failure fallback | `python -m pytest backend/tests/test_grounded_policy.py -k "safe_fallback and timeout"` | Forced timeout returns the evidence template and trusted citation |
+| LLM-isolated order lookup | `Tra cứu đơn hàng ASIA-1001 giúp tôi` | Safe order summary; the generator is not called; admin counts update |
+| Confirmation guardrail | `Tôi muốn tạo phiếu hỗ trợ vì sản phẩm bị lỗi` | Cancel creates none; explicit confirmation creates exactly one ticket |
 
 `ASIA-1001` and `ASIA-1002` belong to the fixed synthetic customer
 `demo-customer-001`. `ASIA-9999` is a non-owned safety fixture. Repeating a
@@ -254,6 +254,7 @@ live under [`docs/decisions/`](docs/decisions/README.md).
 | [`frontend/`](frontend/) | React demo UI, component tests, and Playwright flows |
 | [`docs/demo-scope.md`](docs/demo-scope.md) | Current milestone, product contract, scope boundaries, and safety invariants |
 | [`docs/decisions/`](docs/decisions/README.md) | Architecture Decision Records |
+| [`docs/releases/`](docs/releases/v0.2.0.md) | Release evidence, invariant mapping, gates, and known limitations |
 | [`docs/dev-workflow.md`](docs/dev-workflow.md) | Branching, commit, verification, and integration workflow |
 | [`docs/policies/`](docs/policies/) | Trusted synthetic policy corpus |
 | [`eval/`](eval/README.md) | Versioned Vietnamese cases, frozen baseline, and target metrics |
@@ -279,17 +280,24 @@ live under [`docs/decisions/`](docs/decisions/README.md).
 ## v0.2 direction
 
 The v0.2 scope, metric definitions, policy corpus, and 86 evaluation cases are
-now frozen. [ADR-005](docs/decisions/005-openai-responses-for-grounded-generation.md)
-selects the OpenAI Responses API as the single optional external generator;
-its async runtime is integrated while template generation remains the offline
+now frozen. [ADR-006](docs/decisions/006-local-h2-policy-retrieval.md) records
+the local retrieval decision, while
+[ADR-005](docs/decisions/005-openai-responses-for-grounded-generation.md)
+selects the OpenAI Responses API as the single optional external generator.
+Its async runtime is integrated while template generation remains the offline
 default.
 
 Local H2 retrieval, grounded template generation, redaction, no-evidence
 no-call behavior, safe provider fallback, and application-owned citations now
-pass their offline gates. Remaining v0.2 release work is the genuine external
-reference run and human review, followed by security checks and the four
-original E2E flows. These steps do not introduce new product flows or broaden
+pass their offline gates. Local release hardening, the security audit, and all
+four original E2E flows also pass. The remaining v0.2 gate is a genuine
+external reference run with complete human review, followed by review and a
+clean release tree. These steps do not introduce new product flows or broaden
 model authority.
+
+Candidate gate status and the executable invariant map live in
+[`docs/releases/v0.2.0.md`](docs/releases/v0.2.0.md); that record must show no
+pending required gate before tagging.
 
 Authentication, deployment, multi-tenant behavior, production storage, vector
 infrastructure, external embeddings, real commerce data, model-controlled write

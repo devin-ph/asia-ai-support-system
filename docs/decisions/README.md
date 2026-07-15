@@ -15,3 +15,4 @@ contracts remain in `docs/demo-scope.md`, evaluation thresholds remain under
 | [003](003-confirmation-guardrail-separation.md) | Confirmation guardrail separation | Accepted |
 | [004](004-synthetic-data-only-in-v01.md) | Synthetic data only in v0.1 | Accepted |
 | [005](005-openai-responses-for-grounded-generation.md) | OpenAI Responses API for grounded generation | Accepted |
+| [006](006-local-h2-policy-retrieval.md) | Local H2 policy retrieval | Accepted |

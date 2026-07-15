@@ -15,11 +15,20 @@ interface AdminOverview {
 }
 
 interface ChatResponse {
+  assistant_message: string;
+  intent: string;
+  sentiment: string;
+  citations: Array<{
+    title: string;
+    source: string;
+    section: string;
+  }>;
   tool_events: Array<{
     tool: string;
     status: string;
     order: Record<string, unknown> | null;
   }>;
+  pending_action: Record<string, unknown> | null;
 }
 
 async function getAdminOverview(
@@ -52,19 +61,43 @@ test.describe.serial("A.S.I.A demo browser flows", () => {
   test("answers a policy question with a visible citation", async ({ page }) => {
     await page.goto("/");
 
-    await sendChatMessage(page, "Chính sách đổi trả áp dụng trong bao lâu?");
+    const chatResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/chat") &&
+        response.request().method() === "POST",
+    );
+    await sendChatMessage(
+      page,
+      "Chính sách giao hàng cho biết dữ liệu hành trình được tổng hợp từ đâu?",
+    );
+    const payload = (await (await chatResponse).json()) as ChatResponse;
 
-    await expect(page.getByText(/vòng 7 ngày/)).toBeVisible();
+    expect(Object.keys(payload).sort()).toEqual([
+      "assistant_message",
+      "citations",
+      "intent",
+      "pending_action",
+      "sentiment",
+      "tool_events",
+    ]);
+    expect(payload.assistant_message.trim()).not.toBe("");
+    expect(payload.assistant_message).toMatch(/dữ liệu demo.*đơn vị vận chuyển/i);
+    expect(payload.assistant_message).not.toMatch(/bịa|30 ngày|14 ngày/i);
+    expect(payload.citations).toEqual([
+      {
+        title: "Chính sách giao hàng",
+        source: "docs/policies/shipping_policy.md",
+        section: "Theo dõi hành trình",
+      },
+    ]);
+
+    await expect(page.getByText(/dữ liệu demo.*đơn vị vận chuyển/i)).toBeVisible();
     const citations = page.getByRole("region", { name: "Nguồn chính sách" });
     await expect(citations).toBeVisible();
+    await expect(citations.getByText("Chính sách giao hàng")).toBeVisible();
+    await expect(citations.getByText("Theo dõi hành trình")).toBeVisible();
     await expect(
-      citations.getByText("Chính sách đổi trả và hoàn tiền"),
-    ).toBeVisible();
-    await expect(
-      citations.getByText("Điều kiện và thời hạn đổi trả"),
-    ).toBeVisible();
-    await expect(
-      citations.getByText("docs/policies/return_policy.md"),
+      citations.getByText("docs/policies/shipping_policy.md"),
     ).toBeVisible();
   });
 
