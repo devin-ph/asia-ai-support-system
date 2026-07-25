@@ -71,21 +71,24 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
         IntentLabel.RETURN_REFUND,
         IntentLabel.WARRANTY,
     }:
-        state.record_tool("policy_search")
         policy_result = await providers.policy.answer(
             req.message,
             request_id=uuid.uuid4().hex,
         )
         assistant_message = policy_result.answer
         citations = list(policy_result.citations)
-        tool_events.append(
-            ToolEvent(
-                tool=ToolName.POLICY_SEARCH,
-                status=(
-                    ToolEventStatus.COMPLETED if citations else ToolEventStatus.INSUFFICIENT_CONTEXT
-                ),
+        if policy_result.lookup_performed:
+            state.record_tool("policy_search")
+            tool_events.append(
+                ToolEvent(
+                    tool=ToolName.POLICY_SEARCH,
+                    status=(
+                        ToolEventStatus.COMPLETED
+                        if citations
+                        else ToolEventStatus.INSUFFICIENT_CONTEXT
+                    ),
+                )
             )
-        )
     elif intent == IntentLabel.ORDER_LOOKUP:
         order_result = providers.orders.lookup(req.message)
         assistant_message = order_result.answer

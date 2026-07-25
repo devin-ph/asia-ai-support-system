@@ -20,7 +20,7 @@ DEMO_TICKETS_PATH = RUNTIME_DIR / "demo_tickets.json"
 class OrderRecord(BaseModel):
     """Internal synthetic order record, including ownership."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     order_id: str
     owner_customer_id: str
@@ -34,7 +34,7 @@ class OrderRecord(BaseModel):
 class TicketRecord(BaseModel):
     """One confirmed synthetic support ticket."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     ticket_id: str
     action_id: str
@@ -65,6 +65,7 @@ def save_tickets(
     path: Path = DEMO_TICKETS_PATH,
 ) -> None:
     """Validate and atomically save confirmed synthetic tickets."""
+    _reject_fixture_write_path(path)
     records = tuple(tickets)
     _TICKET_ADAPTER.validate_python(records)
     payload = [ticket.model_dump(mode="json") for ticket in records]
@@ -80,3 +81,11 @@ def save_tickets(
     finally:
         if temporary_path.exists():
             temporary_path.unlink()
+
+
+def _reject_fixture_write_path(path: Path) -> None:
+    """Reject ticket stores that resolve inside immutable fixture storage."""
+    resolved_path = path.resolve(strict=False)
+    resolved_fixtures_dir = FIXTURES_DIR.resolve(strict=False)
+    if resolved_path == resolved_fixtures_dir or resolved_fixtures_dir in resolved_path.parents:
+        raise ValueError("Runtime ticket storage must not be under data/fixtures")

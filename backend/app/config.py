@@ -14,6 +14,7 @@ LLM_MODEL_ENV = "ASIA_LLM_MODEL"
 LLM_TIMEOUT_ENV = "ASIA_LLM_TIMEOUT_SECONDS"
 DEFAULT_LLM_TIMEOUT_SECONDS = 15.0
 MAX_LLM_TIMEOUT_SECONDS = 120.0
+V02_REFERENCE_MODEL = "gpt-5.4-mini-2026-03-17"
 
 
 class ProviderConfigurationError(ValueError):
@@ -102,5 +103,6 @@ __all__ = [
     "RESPONSE_GENERATOR_ENV",
     "ResponseGeneratorName",
     "Settings",
+    "V02_REFERENCE_MODEL",
     "load_settings",
 ]

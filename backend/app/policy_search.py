@@ -34,6 +34,7 @@ class PolicySearchResult:
     answer: str
     citations: tuple[Citation, ...]
     generation_fallback_reason: str | None = None
+    lookup_performed: bool = True
 
 
 _RULES = (

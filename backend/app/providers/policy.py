@@ -17,15 +17,23 @@ from app.providers.generation import (
 )
 from app.schemas import Citation
 
-_ORDER_ID_PATTERN = re.compile(r"(?<!\w)ASIA(?:[-\s]?\d{4,})(?!\w)", re.IGNORECASE)
+_ORDER_ID_PATTERN = re.compile(r"ASIA(?:[-\s]?\d{4,})", re.IGNORECASE)
 _EMAIL_PATTERN = re.compile(
     r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
     re.IGNORECASE,
 )
 _PHONE_PATTERN = re.compile(r"(?<!\w)(?:\+?84|0)(?:[\s.-]?\d){8,10}(?!\w)")
+_INTERNAL_CUSTOMER_ID_PATTERN = re.compile(
+    r"demo[-_\s]+customer[-_\s]+\d+",
+    re.IGNORECASE,
+)
+_ACTION_ID_PATTERN = re.compile(r"act_[a-z0-9_-]+", re.IGNORECASE)
+_TICKET_ID_PATTERN = re.compile(r"tkt_[a-z0-9_-]+", re.IGNORECASE)
+_STRUCTURED_DELIMITER_PATTERN = re.compile(r"[\[{]")
 _SENSITIVE_PAYLOAD_PATTERN = re.compile(
     r"(?<!\w)[\"']?(?:ticket_payload|pending_action|admin_state|order_response|"
-    r"internal_customer_id|customer_id|conversation_history|raw_logs?)[\"']?\s*[:=]",
+    r"internal_customer_id|customer_id|conversation_history|raw_logs?|action_id|"
+    r"action_type|ticket_id|payload)[\"']?\s*[:=]",
     re.IGNORECASE,
 )
 
@@ -63,7 +71,7 @@ class GroundedPolicyProvider:
     ) -> PolicySearchResult:
         policy_query = _extract_policy_portion(query)
         if policy_query is None:
-            return _insufficient_context_result()
+            return _insufficient_context_result(lookup_performed=False)
 
         retrieval = self._retriever.retrieve(policy_query)
         if not retrieval.sufficient:
@@ -96,16 +104,30 @@ def redact_policy_query(query: str) -> str | None:
 
 
 def _extract_policy_portion(query: str) -> str | None:
-    marker = _SENSITIVE_PAYLOAD_PATTERN.search(query)
-    policy_portion = query[: marker.start()] if marker is not None else query
+    boundaries = tuple(
+        match.start()
+        for match in (
+            _SENSITIVE_PAYLOAD_PATTERN.search(query),
+            _STRUCTURED_DELIMITER_PATTERN.search(query),
+        )
+        if match is not None
+    )
+    boundary = min(boundaries) if boundaries else None
+    policy_portion = query[:boundary] if boundary is not None else query
     policy_portion = " ".join(policy_portion.split())
-    if marker is not None:
+    if boundary is not None:
         policy_portion = policy_portion.rstrip("{[(:,;\"' ")
     return policy_portion if re.search(r"\w", policy_portion) else None
 
 
 def _redact_identifiers(policy_portion: str) -> str:
-    redacted = _ORDER_ID_PATTERN.sub("[ORDER_ID]", policy_portion)
+    redacted = _INTERNAL_CUSTOMER_ID_PATTERN.sub(
+        "[CUSTOMER_ID]",
+        policy_portion,
+    )
+    redacted = _ORDER_ID_PATTERN.sub("[ORDER_ID]", redacted)
+    redacted = _ACTION_ID_PATTERN.sub("[ACTION_ID]", redacted)
+    redacted = _TICKET_ID_PATTERN.sub("[TICKET_ID]", redacted)
     redacted = _EMAIL_PATTERN.sub("[EMAIL]", redacted)
     redacted = _PHONE_PATTERN.sub("[PHONE]", redacted)
     return redacted
@@ -125,10 +147,14 @@ def build_citations_from(
     )
 
 
-def _insufficient_context_result() -> PolicySearchResult:
+def _insufficient_context_result(
+    *,
+    lookup_performed: bool = True,
+) -> PolicySearchResult:
     return PolicySearchResult(
         answer=INSUFFICIENT_CONTEXT_ANSWER,
         citations=(),
+        lookup_performed=lookup_performed,
     )
 
 
