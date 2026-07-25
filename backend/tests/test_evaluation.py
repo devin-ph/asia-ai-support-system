@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import importlib.util
 import json
 import sys
@@ -28,6 +29,43 @@ def _load_evaluation_module() -> ModuleType:
 
 
 EVALUATION = _load_evaluation_module()
+
+
+def _tamper_reference(
+    reference: dict[str, object],
+    path: tuple[str, ...],
+    value: object,
+) -> dict[str, object]:
+    candidate = copy.deepcopy(reference)
+    current = candidate
+    for field in path[:-1]:
+        nested = current[field]
+        assert isinstance(nested, dict)
+        current = nested
+    current[path[-1]] = value
+    return candidate
+
+
+@pytest.fixture(scope="module")
+def valid_curated_reference() -> dict[str, object]:
+    datasets = EVALUATION.load_v02_datasets()
+    metrics, outcomes = EVALUATION.evaluate_v02_generation(datasets["grounded_generation"])
+    live_artifact = EVALUATION.build_live_result_artifact(
+        provider="openai",
+        model=EVALUATION.V02_REFERENCE_MODEL,
+        prompt_version="grounded-policy-v4",
+        timeout_seconds=15.0,
+        duration_ms=2100.0,
+        metrics=metrics,
+        outcomes=outcomes,
+        generated_at=datetime(2026, 7, 15, 1, 2, 3, tzinfo=UTC),
+    )
+    for case in live_artifact["cases"]:
+        case["human_score"] = 2
+    return EVALUATION.build_curated_reference(
+        live_artifact,
+        curated_at=datetime(2026, 7, 15, 2, 3, 4, tzinfo=UTC),
+    )
 
 
 def test_all_evaluation_datasets_are_non_empty_with_unique_ids() -> None:
@@ -194,11 +232,75 @@ def test_v02_offline_generation_meets_the_automated_frozen_gates() -> None:
     assert report["generation_config"] == {
         "provider": "template",
         "model": None,
-        "prompt_version": "grounded-policy-v2",
+        "prompt_version": "grounded-policy-v4",
         "evidence_limit": 1,
         "external_network": False,
         "application_owned_citations": True,
     }
+
+
+def test_release_report_requires_committed_human_review(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(EVALUATION, "V02_REFERENCE", tmp_path / "v0.2-reference.json")
+
+    assert EVALUATION.build_v02_contract_report()["human_reference_review_status"] == (
+        "pending_external_reference_run"
+    )
+    with pytest.raises(EVALUATION.EvaluationDataError, match="release gate requires"):
+        EVALUATION.build_v02_contract_report(require_reference=True)
+
+
+def test_required_reference_must_be_tracked_by_git(
+    valid_curated_reference: dict[str, object],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reference_path = tmp_path / "eval" / "results" / "v0.2-reference.json"
+    reference_path.parent.mkdir(parents=True)
+    reference_path.write_text(
+        json.dumps(valid_curated_reference, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(EVALUATION, "ROOT", tmp_path)
+    monkeypatch.setattr(EVALUATION, "V02_REFERENCE", reference_path)
+    monkeypatch.setattr(EVALUATION, "validate_curated_reference", lambda _reference: None)
+    tracked = {"value": False}
+    commands: list[list[str]] = []
+
+    def git_ls_files(command: list[str], **kwargs: object) -> SimpleNamespace:
+        commands.append(command)
+        assert kwargs == {
+            "cwd": tmp_path,
+            "capture_output": True,
+            "text": True,
+        }
+        return SimpleNamespace(returncode=0 if tracked["value"] else 1)
+
+    monkeypatch.setattr(EVALUATION.subprocess, "run", git_ls_files)
+
+    with pytest.raises(EVALUATION.EvaluationDataError, match="tracked by Git"):
+        EVALUATION.load_committed_v02_reference(required=True)
+
+    tracked["value"] = True
+    assert EVALUATION.load_committed_v02_reference(required=True) == valid_curated_reference
+    assert commands == [
+        [
+            "git",
+            "ls-files",
+            "--error-unmatch",
+            "--",
+            "eval/results/v0.2-reference.json",
+        ],
+        [
+            "git",
+            "ls-files",
+            "--error-unmatch",
+            "--",
+            "eval/results/v0.2-reference.json",
+        ],
+    ]
 
 
 def test_live_result_artifact_contains_provenance_without_raw_content() -> None:
@@ -207,7 +309,7 @@ def test_live_result_artifact_contains_provenance_without_raw_content() -> None:
     artifact = EVALUATION.build_live_result_artifact(
         provider="openai",
         model="test-model-snapshot",
-        prompt_version="grounded-policy-v2",
+        prompt_version="grounded-policy-v4",
         timeout_seconds=15.0,
         duration_ms=2100.0,
         metrics=metrics,
@@ -244,7 +346,7 @@ def test_live_result_artifact_contains_provenance_without_raw_content() -> None:
     fallback_artifact = EVALUATION.build_live_result_artifact(
         provider="openai",
         model="test-model-snapshot",
-        prompt_version="grounded-policy-v2",
+        prompt_version="grounded-policy-v4",
         timeout_seconds=15.0,
         duration_ms=2100.0,
         metrics=metrics,
@@ -262,8 +364,8 @@ def test_curated_reference_requires_human_scores_and_strips_answer_text() -> Non
     metrics, outcomes = EVALUATION.evaluate_v02_generation(datasets["grounded_generation"])
     live_artifact = EVALUATION.build_live_result_artifact(
         provider="openai",
-        model="test-model-snapshot",
-        prompt_version="grounded-policy-v2",
+        model=EVALUATION.V02_REFERENCE_MODEL,
+        prompt_version="grounded-policy-v4",
         timeout_seconds=15.0,
         duration_ms=2100.0,
         metrics=metrics,
@@ -281,6 +383,7 @@ def test_curated_reference_requires_human_scores_and_strips_answer_text() -> Non
 
     EVALUATION.validate_curated_reference(curated)
     assert curated["artifact_type"] == "v0.2-grounded-generation-reference"
+    assert curated["model"] == EVALUATION.V02_REFERENCE_MODEL
     assert curated["curated_at"] == "2026-07-15T02:03:04+00:00"
     assert curated["metrics"]["grounded_response_pass_rate"] == {
         "score": 1.0,
@@ -293,13 +396,64 @@ def test_curated_reference_requires_human_scores_and_strips_answer_text() -> Non
     assert all("answer_text" not in case for case in curated["cases"])
 
 
+def test_curated_reference_requires_exact_top_level_and_nested_schema(
+    valid_curated_reference: dict[str, object],
+) -> None:
+    missing_top_level = copy.deepcopy(valid_curated_reference)
+    missing_top_level.pop("source_created_at")
+    with pytest.raises(EVALUATION.EvaluationDataError, match="top level"):
+        EVALUATION.validate_curated_reference(missing_top_level)
+
+    extra_top_level = {**copy.deepcopy(valid_curated_reference), "raw_prompt": "forbidden"}
+    with pytest.raises(EVALUATION.EvaluationDataError, match="top level"):
+        EVALUATION.validate_curated_reference(extra_top_level)
+
+    missing_parameter = copy.deepcopy(valid_curated_reference)
+    parameters = missing_parameter["parameters"]
+    assert isinstance(parameters, dict)
+    parameters.pop("store")
+    with pytest.raises(EVALUATION.EvaluationDataError, match="parameters"):
+        EVALUATION.validate_curated_reference(missing_parameter)
+
+
+@pytest.mark.parametrize(
+    ("path", "value", "message"),
+    [
+        (("parameters", "store"), True, "content controls"),
+        (("parameters", "max_retries"), 1, "content controls"),
+        (("parameters", "evidence_limit"), 2, "content controls"),
+        (("parameters", "case_count"), 20, "content controls"),
+        (("parameters", "timeout_seconds"), float("inf"), "timeout_seconds"),
+        (("latency_summary", "total_ms"), -1.0, "latency values"),
+        (("latency_summary", "average_ms"), 99.0, "average_ms"),
+        (("source_created_at",), "2026-07-15T01:02:03", "timezone-aware UTC"),
+        (("curated_at",), "2026-07-15T01:00:00+00:00", "later than"),
+        (("human_review", "rubric"), "2=looks-good", "rubric"),
+        (("human_review", "reviewer"), "local-name", "human_review"),
+        (("known_limitations",), [], "known limitations"),
+        (("metrics", "citation_validity_rate", "raw_output"), "x", "metric"),
+        (("metrics", "grounded_response_pass_rate", "minimum"), 0.9, "minimum"),
+    ],
+)
+def test_curated_reference_rejects_tampered_provenance(
+    valid_curated_reference: dict[str, object],
+    path: tuple[str, ...],
+    value: object,
+    message: str,
+) -> None:
+    tampered = _tamper_reference(valid_curated_reference, path, value)
+
+    with pytest.raises(EVALUATION.EvaluationDataError, match=message):
+        EVALUATION.validate_curated_reference(tampered)
+
+
 def test_curated_reference_rejects_unreviewed_or_fallback_run() -> None:
     datasets = EVALUATION.load_v02_datasets()
     metrics, outcomes = EVALUATION.evaluate_v02_generation(datasets["grounded_generation"])
     live_artifact = EVALUATION.build_live_result_artifact(
         provider="openai",
-        model="test-model-snapshot",
-        prompt_version="grounded-policy-v2",
+        model=EVALUATION.V02_REFERENCE_MODEL,
+        prompt_version="grounded-policy-v4",
         timeout_seconds=15.0,
         duration_ms=2100.0,
         metrics=metrics,
@@ -314,13 +468,32 @@ def test_curated_reference_rejects_unreviewed_or_fallback_run() -> None:
         EVALUATION.build_curated_reference(live_artifact)
 
 
+def test_curated_reference_rejects_local_model_override() -> None:
+    datasets = EVALUATION.load_v02_datasets()
+    metrics, outcomes = EVALUATION.evaluate_v02_generation(datasets["grounded_generation"])
+    live_artifact = EVALUATION.build_live_result_artifact(
+        provider="openai",
+        model="local-experiment-model",
+        prompt_version="grounded-policy-v4",
+        timeout_seconds=15.0,
+        duration_ms=2100.0,
+        metrics=metrics,
+        outcomes=outcomes,
+    )
+    for case in live_artifact["cases"]:
+        case["human_score"] = 2
+
+    with pytest.raises(EVALUATION.EvaluationDataError, match="pinned model"):
+        EVALUATION.build_curated_reference(live_artifact)
+
+
 def test_curated_reference_rejects_tampered_metrics_or_provenance() -> None:
     datasets = EVALUATION.load_v02_datasets()
     metrics, outcomes = EVALUATION.evaluate_v02_generation(datasets["grounded_generation"])
     live_artifact = EVALUATION.build_live_result_artifact(
         provider="openai",
-        model="test-model-snapshot",
-        prompt_version="grounded-policy-v2",
+        model=EVALUATION.V02_REFERENCE_MODEL,
+        prompt_version="grounded-policy-v4",
         timeout_seconds=15.0,
         duration_ms=2100.0,
         metrics=metrics,
@@ -336,6 +509,16 @@ def test_curated_reference_rejects_tampered_metrics_or_provenance() -> None:
     live_artifact["metrics"]["citation_validity_rate"]["passed"] = 21
     live_artifact["parameters"]["raw_prompt"] = "must not be curated"
     with pytest.raises(EVALUATION.EvaluationDataError, match="versioned provenance fields"):
+        EVALUATION.build_curated_reference(live_artifact)
+
+    live_artifact["parameters"].pop("raw_prompt")
+    live_artifact["parameters"]["store"] = True
+    with pytest.raises(EVALUATION.EvaluationDataError, match="content controls"):
+        EVALUATION.build_curated_reference(live_artifact)
+
+    live_artifact["parameters"]["store"] = False
+    live_artifact.pop("created_at")
+    with pytest.raises(EVALUATION.EvaluationDataError, match="created_at"):
         EVALUATION.build_curated_reference(live_artifact)
 
 

@@ -40,6 +40,7 @@ def test_search_policy_returns_grounded_answer_and_citation(
 ) -> None:
     result = search_policy(query)
 
+    assert result.lookup_performed is True
     assert answer_fragment in result.answer
     assert len(result.citations) == 1
     citation = result.citations[0]
@@ -50,6 +51,7 @@ def test_search_policy_returns_grounded_answer_and_citation(
 
 def test_search_policy_returns_insufficient_context_without_match() -> None:
     result = search_policy("Có chính sách dành cho quà tặng không?")
+    assert result.lookup_performed is True
     assert result.answer == INSUFFICIENT_CONTEXT_ANSWER
     assert result.citations == ()
 

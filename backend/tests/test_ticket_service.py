@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import app.storage as storage
+import pytest
 from app.schemas import ActionStatus
 from app.storage import (
     DEMO_TICKETS_PATH,
@@ -12,6 +15,7 @@ from app.storage import (
     load_tickets,
 )
 from app.ticket_service import TicketService
+from pydantic import ValidationError
 
 
 def _empty_ticket_path(tmp_path: Path) -> Path:
@@ -25,6 +29,28 @@ def test_default_ticket_paths_separate_seed_from_runtime() -> None:
     assert DEMO_TICKETS_PATH.as_posix().endswith("var/demo_tickets.json")
     assert DEMO_TICKETS_SEED_PATH != DEMO_TICKETS_PATH
     assert load_tickets(DEMO_TICKETS_SEED_PATH) == ()
+
+
+def test_ticket_store_rejects_unexpected_fields(tmp_path: Path) -> None:
+    tickets_path = tmp_path / "tickets-with-extra-field.json"
+    tickets_path.write_text(
+        json.dumps(
+            [
+                {
+                    "ticket_id": "tkt_synthetic001",
+                    "action_id": "act_synthetic001",
+                    "summary": "Yêu cầu hỗ trợ demo",
+                    "created_at": "2026-07-20T08:00:00Z",
+                    "customer_email": "synthetic@example.invalid",
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="customer_email"):
+        load_tickets(tickets_path)
 
 
 def test_draft_creates_pending_action_without_ticket(tmp_path: Path) -> None:
@@ -78,6 +104,28 @@ def test_missing_runtime_store_starts_from_immutable_seed(
     assert runtime_path.exists() is True
     assert len(load_tickets(runtime_path)) == 1
     assert DEMO_TICKETS_SEED_PATH.read_text(encoding="utf-8") == seed_before
+
+
+def test_confirmation_rejects_path_resolving_under_fixtures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixtures_dir = tmp_path / "data" / "fixtures"
+    alias_parent = fixtures_dir / "nested"
+    alias_parent.mkdir(parents=True)
+    monkeypatch.setattr(storage, "FIXTURES_DIR", fixtures_dir)
+    aliased_fixture_path = alias_parent / ".." / "demo_tickets.json"
+    service = TicketService(aliased_fixture_path)
+    action = service.draft_ticket("Yêu cầu hỗ trợ demo")
+
+    with pytest.raises(
+        ValueError,
+        match=r"Runtime ticket storage must not be under data/fixtures",
+    ):
+        service.resolve_action(action.action_id, confirm=True)
+
+    assert service.ticket_count == 0
+    assert not (fixtures_dir / "demo_tickets.json").exists()
 
 
 def test_decline_never_creates_a_ticket(tmp_path: Path) -> None:

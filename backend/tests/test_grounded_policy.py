@@ -25,13 +25,13 @@ class RecordingGenerator:
     model = "recording-model"
     prompt_version = "recording-prompt-v1"
 
-    def __init__(self, answer: str = "Câu trả lời do generator tạo.") -> None:
+    def __init__(self, answer: str | None = None) -> None:
         self.answer = answer
         self.calls: list[GroundedGenerationRequest] = []
 
     async def generate(self, request: GroundedGenerationRequest) -> str:
         self.calls.append(request)
-        return self.answer
+        return self.answer if self.answer is not None else request.evidence[0].text
 
 
 class FailingGenerator:
@@ -63,6 +63,23 @@ async def test_insufficient_evidence_never_calls_generator() -> None:
 
     assert result.answer == INSUFFICIENT_CONTEXT_ANSWER
     assert result.citations == ()
+    assert result.lookup_performed is True
+    assert generator.calls == []
+
+
+@pytest.mark.anyio
+async def test_internal_payload_without_policy_text_skips_lookup_and_generator() -> None:
+    generator = RecordingGenerator()
+    provider = GroundedPolicyProvider(GroundedResponseRuntime(generator))
+
+    result = await provider.answer(
+        'action_id=act_deadbeef1234 payload={"summary":"không gửi"}',
+        request_id="req-internal-payload",
+    )
+
+    assert result.answer == INSUFFICIENT_CONTEXT_ANSWER
+    assert result.citations == ()
+    assert result.lookup_performed is False
     assert generator.calls == []
 
 
@@ -133,7 +150,8 @@ async def test_external_query_redacts_tested_identifiers() -> None:
     generator = RecordingGenerator()
     provider = GroundedPolicyProvider(GroundedResponseRuntime(generator))
     query = (
-        "Yêu cầu tiếp nhận bảo hành cho ASIA-1001 cần mã đơn và mô tả lỗi thế nào? "
+        "Yêu cầu tiếp nhận bảo hành cho xdemo-customer-001 và xASIA-1001, "
+        "kèm act_deadbeef1234 và tkt_cafebabe5678, cần mã đơn và mô tả lỗi thế nào? "
         "Liên hệ demo.user@example.com hoặc 090-123-4567."
     )
 
@@ -142,10 +160,16 @@ async def test_external_query_redacts_tested_identifiers() -> None:
     assert result.citations
     assert len(generator.calls) == 1
     sent_query = generator.calls[0].redacted_query
+    assert "[CUSTOMER_ID]" in sent_query
     assert "[ORDER_ID]" in sent_query
+    assert "[ACTION_ID]" in sent_query
+    assert "[TICKET_ID]" in sent_query
     assert "[EMAIL]" in sent_query
     assert "[PHONE]" in sent_query
+    assert "demo-customer-001" not in sent_query
     assert "ASIA-1001" not in sent_query
+    assert "act_deadbeef1234" not in sent_query
+    assert "tkt_cafebabe5678" not in sent_query
     assert "demo.user@example.com" not in sent_query
     assert "090-123-4567" not in sent_query
 
@@ -162,11 +186,45 @@ def test_redaction_preserves_policy_numbers_and_truncates_structured_payloads() 
         == "Phí giao hàng thế nào?"
     )
     assert redact_policy_query("pending_action={payload: 'không gửi'}") is None
+    assert redact_policy_query("action_id=act_deadbeef1234") is None
+    assert redact_policy_query("action_type=create_ticket") is None
+    assert redact_policy_query("ticket_id=tkt_cafebabe5678") is None
+    assert redact_policy_query("payload={summary: 'không gửi'}") is None
     assert redact_policy_query('{"ticket_payload":{"summary":"không gửi"}}') is None
     assert (
         redact_policy_query('Phí giao hàng thế nào?;{"admin_state":{"total_tickets":4}}')
         == "Phí giao hàng thế nào?"
     )
+    assert (
+        redact_policy_query("Phí giao hàng cho DEMO_customer_001 thế nào?")
+        == "Phí giao hàng cho [CUSTOMER_ID] thế nào?"
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "payload",
+    [
+        '{"order":{"status":"Đang giao","carrier":"Đơn vị Demo"}}',
+        '{"total_messages":2,"intent_counts":{"shipping_policy":1}}',
+        '{"summary":"khiếu nại bí mật","ticket_id":"tkt_deadbeef"}',
+    ],
+)
+async def test_structured_application_payload_shapes_never_reach_generator(
+    payload: str,
+) -> None:
+    generator = RecordingGenerator()
+    provider = GroundedPolicyProvider(GroundedResponseRuntime(generator))
+
+    result = await provider.answer(
+        f"Phí giao hàng được hiển thị lúc nào? {payload}",
+        request_id="req-structured-egress",
+    )
+
+    assert result.citations
+    assert len(generator.calls) == 1
+    assert generator.calls[0].redacted_query == "Phí giao hàng được hiển thị lúc nào?"
+    assert payload not in generator.calls[0].redacted_query
 
 
 @pytest.mark.anyio
@@ -184,6 +242,70 @@ async def test_quoted_structured_payload_never_reaches_generator() -> None:
     assert generator.calls[0].redacted_query == "Phí giao hàng thế nào?"
     assert "ticket_payload" not in generator.calls[0].redacted_query
     assert "ASIA-1001" not in generator.calls[0].redacted_query
+
+
+@pytest.mark.anyio
+async def test_policy_route_excludes_identifiers_and_internal_payloads(
+    tmp_path: Path,
+) -> None:
+    generator = RecordingGenerator()
+    tickets_path = tmp_path / "demo_tickets.json"
+    tickets_path.write_text("[]\n", encoding="utf-8")
+    application = create_app(
+        DemoState(tickets_path=tickets_path),
+        response_runtime=GroundedResponseRuntime(generator),
+    )
+    transport = httpx.ASGITransport(app=application)
+    policy_message = (
+        "Phí giao hàng được hiển thị vào lúc nào? Phí giao hàng phụ thuộc khu vực "
+        "nhận hàng và phương thức vận chuyển thế nào cho xdemo-customer-001 và "
+        "xASIA-10001? "
+        "Liên hệ demo.user@example.com hoặc 090-123-4567. "
+        'action_id=act_deadbeef1234 payload={"ticket_id":"tkt_cafebabe5678",'
+        '"summary":"không gửi"}'
+    )
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        policy_response = await client.post(
+            "/api/chat",
+            json={"message": policy_message},
+        )
+        order_response = await client.post(
+            "/api/chat",
+            json={"message": "Tra cứu đơn ASIA-1001 giúp tôi"},
+        )
+
+    assert policy_response.status_code == 200
+    assert policy_response.json()["intent"] == "shipping_policy"
+    assert policy_response.json()["citations"]
+    assert order_response.status_code == 200
+    assert order_response.json()["intent"] == "order_lookup"
+    assert len(generator.calls) == 1
+
+    sent_request = generator.calls[0]
+    assert "[CUSTOMER_ID]" in sent_request.redacted_query
+    assert "[ORDER_ID]" in sent_request.redacted_query
+    assert "[EMAIL]" in sent_request.redacted_query
+    assert "[PHONE]" in sent_request.redacted_query
+    for excluded in (
+        "demo-customer-001",
+        "ASIA-1001",
+        "ASIA-10001",
+        "act_deadbeef1234",
+        "tkt_cafebabe5678",
+        "demo.user@example.com",
+        "090-123-4567",
+        "action_id",
+        "ticket_id",
+        "payload",
+        "summary",
+    ):
+        assert excluded not in sent_request.redacted_query
+    assert sent_request.evidence
+    assert all(
+        item.chunk_id.startswith("docs/policies/shipping_policy.md#")
+        for item in sent_request.evidence
+    )
 
 
 @pytest.mark.anyio

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from app.main import create_app
 from app.state import DemoState
 from app.storage import load_orders, load_tickets
 from fastapi import FastAPI
+from pydantic import ValidationError
 
 
 def assert_stable_chat_shape(body: dict[str, object]) -> None:
@@ -147,6 +149,26 @@ async def test_policy_without_evidence_returns_insufficient_context(
             "order": None,
         }
     ]
+
+
+@pytest.mark.anyio
+async def test_internal_payload_without_policy_lookup_does_not_record_tool(
+    client: httpx.AsyncClient,
+) -> None:
+    response = await client.post(
+        "/api/chat",
+        json={"message": "customer_id=demo-customer-001 shipping fee"},
+    )
+    overview = await client.get("/api/admin/overview")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert_stable_chat_shape(body)
+    assert body["intent"] == "shipping_policy"
+    assert body["citations"] == []
+    assert body["tool_events"] == []
+    assert overview.json()["tool_calls"] == 0
+    assert overview.json()["tool_counts"]["policy_search"] == 0
 
 
 @pytest.mark.anyio
@@ -384,3 +406,28 @@ def test_repository_order_fixture_is_synthetic_and_schema_bounded() -> None:
         }
         for order in orders
     )
+
+
+def test_order_fixture_rejects_unexpected_fields(tmp_path: Path) -> None:
+    fixture_path = tmp_path / "orders-with-extra-field.json"
+    fixture_path.write_text(
+        json.dumps(
+            [
+                {
+                    "order_id": "ASIA-1001",
+                    "owner_customer_id": "demo-customer-001",
+                    "status": "Đang giao",
+                    "carrier": "Đơn vị vận chuyển Demo",
+                    "estimated_delivery": "2026-07-24",
+                    "items_count": 1,
+                    "last_updated": "2026-07-20T08:00:00Z",
+                    "customer_email": "synthetic@example.invalid",
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="customer_email"):
+        load_orders(fixture_path)

@@ -24,6 +24,9 @@ from app.providers.generation import (
 )
 from openai import APIConnectionError, APITimeoutError, AuthenticationError
 
+_EVIDENCE_TEXT = "Khách hàng có thể yêu cầu đổi trả trong vòng 7 ngày."
+_ANSWER_PREFIX = "Theo thông tin chính sách hiện có:"
+
 
 @dataclass(frozen=True, slots=True)
 class _FakeResponse:
@@ -41,7 +44,7 @@ class _FakeResponsesAPI:
         response: object | None = None,
         error: BaseException | None = None,
     ) -> None:
-        self._response = response or _FakeResponse("Câu trả lời có căn cứ.")
+        self._response = response or _FakeResponse(_EVIDENCE_TEXT)
         self._error = error
         self.calls: list[dict[str, object]] = []
 
@@ -103,7 +106,7 @@ def generation_request() -> GroundedGenerationRequest:
         evidence=(
             GroundingEvidence(
                 chunk_id="return-policy--conditions",
-                text="Khách hàng có thể yêu cầu đổi trả trong vòng 7 ngày.",
+                text=_EVIDENCE_TEXT,
             ),
         ),
     )
@@ -115,7 +118,7 @@ async def test_template_generator_is_offline_and_requires_evidence(
 ) -> None:
     answer = await TemplateResponseGenerator().generate(generation_request)
 
-    assert "7 ngày" in answer
+    assert answer == _EVIDENCE_TEXT
     with pytest.raises(ValueError, match="requires evidence"):
         GroundedGenerationRequest(
             request_id="req-empty",
@@ -136,7 +139,7 @@ async def test_openai_generator_sends_text_only_request_without_storage(
 
     answer = await generator.generate(generation_request)
 
-    assert answer == "Câu trả lời có căn cứ."
+    assert answer == _EVIDENCE_TEXT
     assert len(responses.calls) == 1
     call = responses.calls[0]
     assert call["model"] == "gpt-5.4-mini-2026-03-17"
@@ -238,6 +241,9 @@ async def test_missing_output_is_mapped_to_malformed_response(
     "answer",
     [
         "Khách được đổi trả trong 30 ngày.",
+        "Chính sách cho phép đổi hàng đã qua sử dụng.",
+        "có thể yêu cầu đổi trả trong vòng 7 ngày.",
+        f"{_EVIDENCE_TEXT}\nChính sách áp dụng cho mọi sản phẩm.",
         'Nguồn tự khai: {"source":"untrusted.md","section":"Bịa đặt"}.',
         "   ",
     ],
@@ -250,9 +256,67 @@ async def test_runtime_rejects_output_that_violates_grounded_contract(
     runtime = GroundedResponseRuntime(_StaticGenerator(answer))
 
     result = await runtime.generate_result(generation_request)
-    expected = await TemplateResponseGenerator().generate(generation_request)
 
-    assert result.text == expected
+    assert result.text == f"{_ANSWER_PREFIX}\n\n{_EVIDENCE_TEXT}"
+    assert result.fallback_reason == "malformed_response"
+
+
+@pytest.mark.anyio
+async def test_runtime_accepts_complete_evidence_unit(
+    generation_request: GroundedGenerationRequest,
+) -> None:
+    runtime = GroundedResponseRuntime(_StaticGenerator(_EVIDENCE_TEXT))
+
+    result = await runtime.generate_result(generation_request)
+
+    assert result.text == f"{_ANSWER_PREFIX}\n\n{_EVIDENCE_TEXT}"
+    assert result.fallback_reason is None
+
+
+@pytest.mark.anyio
+async def test_runtime_accepts_multiple_complete_units_with_normalized_whitespace() -> None:
+    second_evidence_line = "Sản phẩm cần còn nguyên phụ kiện."
+    request = GroundedGenerationRequest(
+        request_id="req-multiple-evidence-lines",
+        redacted_query="Điều kiện đổi trả là gì?",
+        evidence=(
+            GroundingEvidence(
+                chunk_id="return-policy--conditions",
+                text=f"{_EVIDENCE_TEXT}\n\n{second_evidence_line}",
+            ),
+        ),
+    )
+    runtime = GroundedResponseRuntime(
+        _StaticGenerator(
+            "  Khách hàng có thể yêu cầu đổi trả trong vòng   7 ngày.  "
+            f"\n\t{second_evidence_line}  "
+        )
+    )
+
+    result = await runtime.generate_result(request)
+
+    assert result.text == f"{_ANSWER_PREFIX}\n\n{_EVIDENCE_TEXT}\n{second_evidence_line}"
+    assert result.fallback_reason is None
+
+
+@pytest.mark.anyio
+async def test_runtime_rejects_excerpt_that_strips_negation() -> None:
+    evidence_text = "Sản phẩm không hỗ trợ đổi trả."
+    request = GroundedGenerationRequest(
+        request_id="req-negation",
+        redacted_query="Sản phẩm có hỗ trợ đổi trả không?",
+        evidence=(
+            GroundingEvidence(
+                chunk_id="return-policy--excluded",
+                text=evidence_text,
+            ),
+        ),
+    )
+    runtime = GroundedResponseRuntime(_StaticGenerator("hỗ trợ đổi trả."))
+
+    result = await runtime.generate_result(request)
+
+    assert result.text == f"{_ANSWER_PREFIX}\n\n{evidence_text}"
     assert result.fallback_reason == "malformed_response"
 
 
@@ -309,7 +373,12 @@ async def test_prompt_boundaries_escape_untrusted_markup() -> None:
     assert "&amp;" in sent
     assert request.evidence[0].chunk_id not in sent
     assert "Do not perform or claim any action" in GROUNDING_INSTRUCTIONS
-    assert "application owns all citation metadata" in GROUNDING_INSTRUCTIONS
+    assert "every output line must equal an entire non-empty evidence line" in (
+        GROUNDING_INSTRUCTIONS
+    )
+    assert "Do not paraphrase" in GROUNDING_INSTRUCTIONS
+    assert "remove context such as a negation" in GROUNDING_INSTRUCTIONS
+    assert "application adds the answer wrapper" in GROUNDING_INSTRUCTIONS
 
 
 @pytest.mark.anyio
@@ -348,7 +417,7 @@ async def test_telemetry_contains_metadata_but_not_secret_or_content(
     assert record.request_id == generation_request.request_id
     assert record.provider == "openai"
     assert record.model == "test-model"
-    assert record.prompt_version == "grounded-policy-v2"
+    assert record.prompt_version == "grounded-policy-v4"
     assert record.retrieved_chunk_ids == ("return-policy--conditions",)
     assert record.fallback_reason is None
     assert record.error_category is None

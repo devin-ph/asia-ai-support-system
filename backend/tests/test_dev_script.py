@@ -346,6 +346,24 @@ def test_runtime_hygiene_checks_env_runtime_and_live_results_are_ignored(
     ]
 
 
+def test_obvious_secret_scan_reports_location_without_value(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    candidate = tmp_path / "settings.py"
+    secret = "test-placeholder-secret-value"
+    credential_name = "_".join(("api", "key"))
+    candidate.write_text(f'{credential_name} = "{secret}"\n', encoding="utf-8")
+    monkeypatch.setattr(DEV, "ROOT", tmp_path)
+    monkeypatch.setattr(DEV, "_candidate_files", lambda: (candidate,))
+
+    assert DEV._check_obvious_secrets() is False
+    output = capsys.readouterr().out
+    assert "settings.py:1" in output
+    assert secret not in output
+
+
 def test_requirement_lock_accepts_only_exact_pins(tmp_path: Path) -> None:
     lock_path = tmp_path / "requirements.txt"
     lock_path.write_text(
@@ -485,6 +503,38 @@ def test_reference_curation_forwards_reviewed_live_result(
     assert "env" not in captured
 
 
+def test_release_eval_requires_committed_reference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def run_evaluation(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured["command"] = command
+        captured.update(kwargs)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(DEV.subprocess, "run", run_evaluation)
+
+    assert (
+        DEV.cmd_eval(
+            Namespace(
+                suite="v0.2",
+                json=False,
+                live=False,
+                require_reference=True,
+            )
+        )
+        == 0
+    )
+    assert captured["command"] == [
+        DEV.sys.executable,
+        str(DEV.EVALUATION_SCRIPT),
+        "--suite",
+        "v0.2",
+        "--require-reference",
+    ]
+
+
 def test_python_quality_gates_use_active_interpreter() -> None:
     assert DEV._python_quality_commands() == (
         (
@@ -546,6 +596,28 @@ def test_verify_runs_frozen_v01_and_v02_evaluation_gates() -> None:
                 str(DEV.EVALUATION_SCRIPT),
                 "--suite",
                 "v0.2",
+            ],
+        ),
+    )
+
+    assert DEV._evaluation_verification_commands(require_reference=True) == (
+        (
+            "Deterministic evaluation",
+            [
+                DEV.sys.executable,
+                str(DEV.EVALUATION_SCRIPT),
+                "--check-baseline",
+                str(DEV.EVALUATION_BASELINE),
+            ],
+        ),
+        (
+            "v0.2 release evaluation",
+            [
+                DEV.sys.executable,
+                str(DEV.EVALUATION_SCRIPT),
+                "--suite",
+                "v0.2",
+                "--require-reference",
             ],
         ),
     )
@@ -633,7 +705,40 @@ def test_working_tree_status_classifies_changes_and_ignored_artifacts(
     assert working_tree_clean is expected_clean
 
 
-def test_clean_verification_is_ready_for_pr_or_tag(
+@pytest.mark.parametrize(
+    ("branch_output", "expected", "message"),
+    [
+        ("main\n", True, "Current branch is main."),
+        ("codex/v0.2-finalize\n", False, "must run on main"),
+        ("", False, "detached HEAD"),
+    ],
+)
+def test_release_branch_requires_main_and_rejects_detached_head(
+    branch_output: str,
+    expected: bool,
+    message: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def git_branch(
+        command: list[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        assert command == ["git", "branch", "--show-current"]
+        assert kwargs == {
+            "cwd": DEV.ROOT,
+            "capture_output": True,
+            "text": True,
+        }
+        return subprocess.CompletedProcess(command, 0, branch_output, "")
+
+    monkeypatch.setattr(DEV.subprocess, "run", git_branch)
+
+    assert DEV._check_release_branch() is expected
+    assert message in capsys.readouterr().out
+
+
+def test_clean_verification_is_ready_for_review_but_not_release(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     exit_code = DEV._report_verification_summary(
@@ -643,7 +748,9 @@ def test_clean_verification_is_ready_for_pr_or_tag(
 
     assert exit_code == 0
     output = capsys.readouterr().out
-    assert "Verification passed. Working tree clean. Ready for PR/tag." in output
+    assert "Verification passed. Working tree clean. Ready for review/PR." in output
+    assert "Release readiness was not checked" in output
+    assert "Ready for PR/tag" not in output
 
 
 def test_dirty_verification_passes_without_claiming_readiness(
@@ -659,9 +766,39 @@ def test_dirty_verification_passes_without_claiming_readiness(
     assert "Verification passed, but working tree review is required." in output
     assert (
         "Commit/stash/discard uncommitted changes and review local artifacts "
-        "before tagging or opening a PR." in output
+        "before opening a PR." in output
     )
     assert "Ready for PR/tag" not in output
+
+
+def test_release_verification_requires_clean_tree(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = DEV._report_verification_summary(
+        [("v0.2 release evaluation", True)],
+        working_tree_clean=False,
+        release=True,
+    )
+
+    assert exit_code == 1
+    output = capsys.readouterr().out
+    assert "Release verification failed: the working tree must be clean." in output
+    assert "Ready for final release review" not in output
+
+
+def test_clean_release_verification_still_requires_final_review(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = DEV._report_verification_summary(
+        [("v0.2 release evaluation", True)],
+        working_tree_clean=True,
+        release=True,
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "Release verification passed. Working tree clean." in output
+    assert "Ready for final release review; tag only after approval." in output
 
 
 def test_failed_verification_stays_failed_even_with_dirty_tree(
