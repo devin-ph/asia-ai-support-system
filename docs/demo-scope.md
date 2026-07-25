@@ -217,17 +217,28 @@ v0.2.0 is done when:
 - No-evidence requests never invoke a generator.
 - Citation coverage and validity are both 1.00.
 - The curated grounded-response pass rate is at least 0.95.
-- Template mode and CI run without secrets or network access.
+- Template mode and verification run without external-provider secrets or
+  generator API calls. CI setup may still download locked dependencies and
+  Playwright Chromium.
 - External provider configuration, egress, timeout, auth, malformed-output, and
   fallback behavior have executable tests.
 - All 10 invariants and the original E2E flows pass.
 - `eval/baseline.v0.1.json` and its datasets are unchanged.
-- A reference live result records provider, model, prompt, corpus, dataset, and
-  parameter provenance without secrets or raw prompts.
+- A genuine pinned-model live result records provider, model, prompt, corpus,
+  dataset, parameter, and latency provenance without secrets or raw prompts;
+  a human reviewer completes all 21 case scores and verifies the corresponding
+  live run/session.
+- The curated `eval/results/v0.2-reference.json` passes the exact provenance,
+  schema, metric, and content-control checks and is tracked by Git.
 - The v0.2 manifest, dataset hash, policy corpus hash, and frozen v0.1 input hash
   match their committed contract.
-- `python scripts/dev.py doctor`, `python scripts/dev.py verify`, release
-  security checks, and Playwright pass at their documented gates.
+- `doctor`, `test`, both evaluation suites, `verify`, `verify --security`, the
+  release-evidence sub-gate, and Playwright E2E pass at their documented gates
+  on the final release SHA.
+- Demo reset restores runtime state without modifying repository fixtures or
+  otherwise dirtying a clean working tree.
 - README, evaluation docs, ADRs, and examples match implemented behavior.
 - `docs/releases/v0.2.0.md` maps all invariants to executable evidence and
   records release-gate status without redefining this contract.
+- After final review, the integrated `main` working tree is clean and the
+  annotated `v0.2.0` tag is created from that reviewed release SHA.

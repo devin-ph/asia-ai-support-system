@@ -26,7 +26,9 @@ the citation units exposed by the product contract.
 
 ## Consequences
 
-- CI and template mode need no network, model download, or API key.
+- Retrieval and template execution need no model download, generator network
+  call, or API key. CI setup may still download locked dependencies and the
+  Playwright browser.
 - Evidence IDs and citation metadata remain reproducible across processes and
   source load order.
 - The implementation stays proportional to the seven-section corpus.

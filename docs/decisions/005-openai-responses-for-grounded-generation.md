@@ -6,9 +6,9 @@ Accepted; runtime authentication handling amended on 2026-07-15.
 
 ## Context
 
-The v0.2 scope allows one optional external generator to turn sufficient local
-policy evidence into natural Vietnamese prose. Template generation must remain
-the offline default, and the external path must preserve application-owned
+The v0.2 scope allows one optional external generator to select relevant text
+from sufficient local policy evidence. Template generation must remain the
+offline default, and the external path must preserve application-owned
 citations, bounded failures, synthetic-data rules, and reproducible evaluation.
 
 Adding a generic model gateway or several provider integrations would create
@@ -25,7 +25,8 @@ external generator.
   explicitly and its configuration must be validated at startup.
 - The reference model is pinned to `gpt-5.4-mini-2026-03-17`. Local experiments
   may override the model, but the runtime must never switch models silently and
-  every live evaluation artifact must record the model actually used.
+  every live evaluation artifact must record the model actually used. Reference
+  curation rejects any artifact that does not use this exact snapshot.
 - Network calls use `AsyncOpenAI` and the Responses API with no tools and
   `store=False`. The model returns answer text only; the application attaches
   citation metadata from the retrieved evidence.
@@ -34,6 +35,13 @@ external generator.
   admin, and raw log data are excluded.
 - Calls use a short, explicit timeout, initially 15 seconds. SDK retries are
   disabled so one request cannot turn into an unbounded demo delay.
+- Prompt contract `grounded-policy-v4` permits only complete evidence lines or
+  paragraphs, one per non-empty output line. After whitespace normalization,
+  each output line must equal a full evidence unit; substring fragments are
+  rejected so qualifiers and negations cannot be clipped away. The application
+  renders the fixed answer wrapper. Paraphrased, invented, metadata-bearing, or
+  otherwise invalid output is treated as malformed and uses the deterministic
+  evidence template.
 - Missing credentials or model configuration fails before startup. Runtime
   authentication or permission rejection, connection failure, timeout, rate
   limiting, server failure, empty output, or malformed output falls back to the
@@ -52,7 +60,10 @@ a concrete use case.
 
 ## Consequences
 
-- Deterministic mode and CI remain fully offline and do not require an API key.
+- Deterministic mode and CI verification make no external-generator call and do
+  not require an API key. CI setup still downloads locked dependencies and the
+  Playwright browser, and dependency auditing may access package/advisory
+  metadata.
 - A pinned model snapshot and recorded prompt, corpus, dataset, and parameter
   provenance make reference evaluations more repeatable.
 - Async I/O and a single bounded attempt keep the FastAPI request path from

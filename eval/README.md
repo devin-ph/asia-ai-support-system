@@ -22,6 +22,12 @@ python scripts/dev.py eval --suite v0.2 --live
 # After human scoring, validate and promote one ignored live result.
 python scripts/dev.py eval --suite v0.2 --curate-reference var/eval/live-result-....json
 
+# Require the Git-tracked, current, human-reviewed reference.
+python scripts/dev.py eval --suite v0.2 --require-reference
+
+# Release-evidence sub-gate (security, tracked reference, main, and clean tree).
+python scripts/dev.py verify --release
+
 # Machine-readable reports.
 python scripts/dev.py eval --suite v0.1 --json
 python scripts/dev.py eval --suite v0.2 --json
@@ -32,9 +38,13 @@ routing labels, then measures retrieval, automated groundedness, citation
 coverage, and citation validity with the offline template generator. It never
 calls a network. `--live` is the only evaluation path that invokes the selected
 external generator and writes an ignored review artifact. The default eval
-command checks the exact v0.1 snapshot. The release-oriented
-`python scripts/dev.py verify` checks both that snapshot and the v0.2 offline
-gate; use `--live` only for the explicit external reference run.
+command checks the exact v0.1 snapshot. Regular `python scripts/dev.py verify`
+checks both that snapshot and the v0.2 offline gate without claiming release
+readiness. `verify --release` is a release-evidence sub-gate that requires the
+curated human review to be current, Git-tracked, and checked from a clean
+`main`; it fails while any condition is missing. `doctor` and browser E2E remain
+separate final-sequence commands. Use `--live` only for the explicit external
+reference run.
 
 ## Frozen v0.1 baseline
 
@@ -185,6 +195,14 @@ result is 21/21 for automated groundedness, citation coverage, and citation
 validity. This does not complete the final `grounded_response_pass_rate`, which
 also requires the live human review defined below.
 
+Prompt contract `grounded-policy-v4` requires each non-empty output line to
+equal one complete evidence line or paragraph after whitespace normalization.
+Substring fragments are rejected so qualifiers and negations cannot be clipped
+away. The application adds the fixed answer wrapper itself. Paraphrases,
+invented text, citation metadata, or any other malformed output trigger the
+deterministic evidence-template fallback. This is an internal grounding
+boundary and does not change the public API envelope.
+
 Human scores:
 
 | Score | Meaning |
@@ -265,9 +283,32 @@ documented `--curate-reference` command. It accepts only `live-result-*.json`
 under `var/eval/`, validates provider/model/prompt and current corpus/dataset
 hashes, rejects fallback or incomplete runs, recomputes the final score, and
 writes `eval/results/v0.2-reference.json` without local `answer_text`. The
-regular v0.2 evaluator validates that committed reference on every subsequent
-run. No reference file is created before a genuine external run and human
-review exist.
+regular v0.2 evaluator schema-validates a reference found at that fixed path.
+It counts as committed release evidence only when the required-reference gate
+also confirms that Git tracks it. As a release-process requirement, do not run
+curation or retain that fixed-path artifact before a genuine external run and
+complete human review exist.
+
+The committed v0.2 reference uses one exact schema. Validation rejects missing
+or extra top-level and provenance fields, altered `store=False`, zero-retry or
+single-evidence controls, a case-count mismatch, invalid or inconsistent
+latency, non-UTC or out-of-order source/curation timestamps, and a changed human
+rubric. This keeps a manually edited artifact from satisfying the release gate
+with incomplete provenance.
+
+Provider, model, and timing provenance is recorded by the application, not
+cryptographically attested by the provider. The final human reviewer must
+verify the corresponding live run/session. The gate checks schema and internal
+consistency; it does not prove provider receipt or execution.
+
+Local live experiments may use another configured model and still produce a
+review artifact. Curation is stricter: it accepts only the ADR-pinned
+`gpt-5.4-mini-2026-03-17` model, so an override can be compared locally but
+cannot become the v0.2 release reference. At present the reference and human
+review are still pending; `--require-reference` and `verify --release`
+therefore fail by design rather than treating offline metrics as final. The
+required-reference path also rejects a valid local artifact until
+`eval/results/v0.2-reference.json` is reviewed and tracked by Git.
 
 ## Change control
 

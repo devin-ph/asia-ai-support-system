@@ -23,9 +23,13 @@ metrics are frozen before feature implementation.
 | Admin overview | Shows message, ticket, intent, sentiment, and tool counts | Exposes aggregate counters only, without message or customer content |
 
 The public policy flow now uses measured local H2 retrieval, grounded template
-generation by default, and application-owned citations. Selecting the optional
-OpenAI generator changes answer prose only; retrieval, citations, routing, and
-all write guardrails remain application-controlled. The optional LLM analyzer
+generation by default, and application-owned citations. The optional OpenAI
+generator may select complete lines or paragraphs from retrieved evidence; the
+application accepts only full verbatim evidence units, renders the fixed answer
+wrapper, and falls back to the deterministic template for any invalid output.
+Retrieval, citations, routing, and all write guardrails remain
+application-controlled.
+This safety boundary does not change the public API. The optional LLM analyzer
 is deferred to v0.2.1.
 
 ## Technology
@@ -102,7 +106,9 @@ ASIA_LLM_TIMEOUT_SECONDS=15
 enforces a timeout greater than 0 and at most 120 seconds, and never prints the
 key. Process environment values take precedence over `.env`. The policy route
 calls the selected generator only after sufficient local evidence exists;
-template mode remains fully deterministic and offline.
+template mode remains fully deterministic and offline. Local experiments may
+override `ASIA_LLM_MODEL`, but only the pinned
+`gpt-5.4-mini-2026-03-17` snapshot is eligible for the curated v0.2 reference.
 
 Start the backend in one terminal:
 
@@ -134,14 +140,25 @@ Run project commands from the repository root.
 | `python scripts/dev.py eval --suite v0.2` | Run frozen v0.2 retrieval, groundedness, citation, and routing gates offline |
 | `python scripts/dev.py eval --suite v0.2 --live` | Explicitly run the configured external generator and write an ignored review artifact |
 | `python scripts/dev.py eval --suite v0.2 --curate-reference <live-result>` | Validate a human-scored live run and write the fixed release reference |
+| `python scripts/dev.py eval --suite v0.2 --require-reference` | Fail unless the Git-tracked reference is current and its human review is complete |
 | `python scripts/dev.py verify` | Run the full pre-commit verification gate |
 | `python scripts/dev.py verify --security` | Add a vulnerability audit of locked Python dependencies |
+| `python scripts/dev.py verify --release` | Run the release-evidence sub-gate: security audit, tracked reference, `main`, and clean tree |
 
 `verify` covers Python lint and formatting, backend and frontend tests, the
 frozen v0.1 regression, v0.2 offline gates, TypeScript checks, the production
 frontend build, fixture/runtime hygiene, obvious secret assignments, and Git
-whitespace errors. CI runs the security variant from clean checkouts; local
-`verify` is the fastest complete feedback loop.
+whitespace errors. It is a pre-commit/PR gate and deliberately does not claim
+tag readiness. `verify --release` is the release-evidence sub-gate: it also runs
+the Python dependency audit and fails until the pinned-model reference is
+human-reviewed, tracked by Git, current on `main`, and the tree is clean. It
+does not run `doctor` or browser E2E; those remain separate final-sequence
+commands.
+
+CI uses template mode, makes no external-generator API call, and needs no
+provider credential. CI setup still uses ordinary network access to download
+locked Python/npm packages and Playwright Chromium; the dependency audit may
+also access package/advisory metadata.
 
 Run browser E2E coverage for the four demo flows with:
 
@@ -225,6 +242,11 @@ repository fixtures or evaluation baselines.
 ```text
 assistant_message | intent | sentiment | citations | tool_events | pending_action
 ```
+
+The product milestone/release is `v0.2.0`. The health response, FastAPI
+metadata, and frontend package retain API/package version `0.1`/`0.1.0`
+because v0.2 preserves the existing public routes, envelope, and labels; those
+values are contract versions, not the milestone status.
 
 The public intent and sentiment labels, tool semantics, safe order fields, and
 acceptance rules are defined in [`docs/demo-scope.md`](docs/demo-scope.md).
