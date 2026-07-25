@@ -11,6 +11,8 @@ Usage:
     python scripts/dev.py verify    – run full pre-commit verification
     python scripts/dev.py verify --security
                                     – include the Python vulnerability audit
+    python scripts/dev.py verify --release
+                                    – require final v0.2 release evidence
 """
 
 from __future__ import annotations
@@ -766,6 +768,8 @@ def cmd_eval(args: argparse.Namespace) -> int:
         command.append("--json")
     if args.live:
         command.append("--live")
+    if getattr(args, "require_reference", False):
+        command.append("--require-reference")
     curate_reference = getattr(args, "curate_reference", None)
     if curate_reference is not None:
         command.extend(("--curate-reference", str(curate_reference)))
@@ -1018,10 +1022,35 @@ def _ignored_artifact_requires_review(path: str) -> bool:
     return name == ".env" or name.startswith(".env.") or name.endswith(".log")
 
 
+def _check_release_branch() -> bool:
+    """Require the final release evidence check to run from ``main``."""
+    print(f"\n{_bold('[Release branch]')}")
+    result = subprocess.run(
+        ["git", "branch", "--show-current"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(_red(f"  {_FAIL} Could not determine the current Git branch."))
+        return False
+
+    branch = result.stdout.strip()
+    if branch == "main":
+        print(_green(f"  {_OK} Current branch is main."))
+        return True
+    if not branch:
+        print(_red(f"  {_FAIL} verify --release cannot run from a detached HEAD."))
+        return False
+    print(_red(f"  {_FAIL} verify --release must run on main; current branch is {branch}."))
+    return False
+
+
 def _report_verification_summary(
     results: list[tuple[str, bool]],
     *,
     working_tree_clean: bool,
+    release: bool = False,
 ) -> int:
     """Print the final verification outcome without overstating readiness."""
     passed = sum(result for _label, result in results)
@@ -1040,16 +1069,34 @@ def _report_verification_summary(
         print(_red("\nVerification failed. Fix the checks above and retry."))
         return 1
     if not working_tree_clean:
+        if release:
+            print(
+                _red(
+                    "\nRelease verification failed: the working tree must be clean."
+                    "\nReview and resolve every tracked change and local artifact, then retry."
+                )
+            )
+            return 1
         print(
             _yellow(
                 "\nVerification passed, but working tree review is required."
                 "\nCommit/stash/discard uncommitted changes and review local "
-                "artifacts before tagging or opening a PR."
+                "artifacts before opening a PR."
             )
         )
         return 0
 
-    print(_green("\nVerification passed. Working tree clean. Ready for PR/tag."))
+    if release:
+        print(
+            _green(
+                "\nRelease verification passed. Working tree clean. "
+                "Ready for final release review; tag only after approval."
+            )
+        )
+        return 0
+
+    print(_green("\nVerification passed. Working tree clean. Ready for review/PR."))
+    print("Release readiness was not checked; use verify --release after human review.")
     return 0
 
 
@@ -1091,8 +1138,19 @@ def _python_security_commands() -> tuple[tuple[str, list[str]], ...]:
     )
 
 
-def _evaluation_verification_commands() -> tuple[tuple[str, list[str]], ...]:
-    """Return the frozen v0.1 regression and v0.2 offline release gates."""
+def _evaluation_verification_commands(
+    *,
+    require_reference: bool = False,
+) -> tuple[tuple[str, list[str]], ...]:
+    """Return the frozen v0.1 regression and v0.2 evaluation gates."""
+    v02_command = [
+        sys.executable,
+        str(EVALUATION_SCRIPT),
+        "--suite",
+        "v0.2",
+    ]
+    if require_reference:
+        v02_command.append("--require-reference")
     return (
         (
             "Deterministic evaluation",
@@ -1104,20 +1162,22 @@ def _evaluation_verification_commands() -> tuple[tuple[str, list[str]], ...]:
             ],
         ),
         (
-            "v0.2 offline evaluation",
-            [
-                sys.executable,
-                str(EVALUATION_SCRIPT),
-                "--suite",
-                "v0.2",
-            ],
+            "v0.2 release evaluation" if require_reference else "v0.2 offline evaluation",
+            v02_command,
         ),
     )
 
 
 def cmd_verify(args: argparse.Namespace) -> int:
     """Run the complete pre-commit and pre-PR verification suite."""
-    print(_bold("Running full project verification..."))
+    release = getattr(args, "release", False)
+    print(
+        _bold(
+            "Running v0.2 release verification..."
+            if release
+            else "Running full project verification..."
+        )
+    )
     results: list[tuple[str, bool]] = []
 
     for label, command in _python_quality_commands():
@@ -1128,7 +1188,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
             )
         )
 
-    if args.security:
+    if getattr(args, "security", False) or release:
         for label, command in _python_security_commands():
             results.append(
                 (
@@ -1153,7 +1213,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
             ),
         )
     )
-    for label, command in _evaluation_verification_commands():
+    for label, command in _evaluation_verification_commands(require_reference=release):
         results.append(
             (
                 label,
@@ -1210,6 +1270,8 @@ def cmd_verify(args: argparse.Namespace) -> int:
             ("Git whitespace check", _check_git_whitespace()),
         )
     )
+    if release:
+        results.append(("Release branch", _check_release_branch()))
 
     status_read, working_tree_clean = _inspect_working_tree()
     if not status_read:
@@ -1217,6 +1279,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return _report_verification_summary(
         results,
         working_tree_clean=working_tree_clean,
+        release=release,
     )
 
 
@@ -1260,11 +1323,21 @@ def main() -> int:
         metavar="LIVE_RESULT",
         help="Validate a human-scored live result and write eval/results/v0.2-reference.json",
     )
+    eval_parser.add_argument(
+        "--require-reference",
+        action="store_true",
+        help="Fail unless the valid, human-reviewed v0.2 reference is Git-tracked",
+    )
     verify_parser = sub.add_parser("verify", help="Run full pre-commit verification")
     verify_parser.add_argument(
         "--security",
         action="store_true",
         help="Include the Python dependency vulnerability audit",
+    )
+    verify_parser.add_argument(
+        "--release",
+        action="store_true",
+        help="Require curated v0.2 reference, security audit, main branch, and a clean tree",
     )
 
     args = parser.parse_args()

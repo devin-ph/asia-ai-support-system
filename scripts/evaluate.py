@@ -6,14 +6,16 @@ import argparse
 import asyncio
 import hashlib
 import json
+import math
 import re
+import subprocess
 import sys
 import tempfile
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -47,11 +49,51 @@ _CURATED_PARAMETER_FIELDS = (
     "max_retries",
 )
 _CURATED_LATENCY_FIELDS = ("total_ms", "average_ms")
+_HUMAN_REVIEW_RUBRIC = "0=unsafe-or-unsupported, 1=partial, 2=fully-grounded"
+_CURATED_REFERENCE_FIELDS = frozenset(
+    {
+        "schema_version",
+        "artifact_type",
+        "release",
+        "source_created_at",
+        "curated_at",
+        "provider",
+        "model",
+        "prompt_version",
+        "corpus_hash",
+        "dataset_hash",
+        "parameters",
+        "latency_summary",
+        "metrics",
+        "fallbacks",
+        "human_review",
+        "known_limitations",
+        "cases",
+    }
+)
+_CURATED_METRIC_NAMES = frozenset(
+    {
+        "automated_grounded_response_pass_rate",
+        "citation_coverage_rate",
+        "citation_validity_rate",
+        "grounded_response_pass_rate",
+    }
+)
+_AUTOMATED_METRIC_FIELDS = frozenset({"score", "passed", "total", "failures"})
+_FINAL_METRIC_FIELDS = frozenset({"score", "passed", "total", "minimum", "target_met"})
+_HUMAN_REVIEW_FIELDS = frozenset({"status", "rubric", "reviewed_cases", "required_cases"})
+_CURATED_KNOWN_LIMITATIONS = (
+    "Single-turn Vietnamese policy benchmark over three synthetic Markdown files.",
+    "Human scores demonstrate the frozen 21-case set, not universal groundedness.",
+    "Order, ticket, and admin flows remain deterministic and outside the generator.",
+)
 
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app.config import (  # noqa: E402
+    MAX_LLM_TIMEOUT_SECONDS,
+    V02_REFERENCE_MODEL,
     ProviderConfigurationError,
     ResponseGeneratorName,
     load_settings,
@@ -724,7 +766,7 @@ def _contains_required_claim(normalized_answer: str, option: str) -> bool:
     )
 
 
-def build_v02_contract_report() -> dict[str, Any]:
+def build_v02_contract_report(*, require_reference: bool = False) -> dict[str, Any]:
     """Validate the frozen contract and measure offline v0.2 behavior."""
     datasets = load_v02_datasets()
     validate_v02_target_contract(datasets)
@@ -759,7 +801,7 @@ def build_v02_contract_report() -> dict[str, Any]:
             f"{automated_groundedness.score:.6f} is below pre-review minimum "
             f"{groundedness_minimum:.6f}: " + "; ".join(automated_groundedness.failures)
         )
-    reference = load_committed_v02_reference()
+    reference = load_committed_v02_reference(required=require_reference)
     reference_complete = reference is not None
     return {
         "suite_id": "v0.2-evaluation-contract",
@@ -947,7 +989,7 @@ def build_live_result_artifact(
         "automated_gate_passed": automated_gate_passed,
         "human_review": {
             "status": "pending",
-            "rubric": "0=unsafe-or-unsupported, 1=partial, 2=fully-grounded",
+            "rubric": _HUMAN_REVIEW_RUBRIC,
             "reviewed_cases": 0,
             "required_cases": len(outcomes),
         },
@@ -1028,6 +1070,156 @@ def _curated_metadata_fields(
     return {field: value[field] for field in allowed_fields}
 
 
+def _require_exact_object_fields(
+    value: object,
+    expected_fields: frozenset[str] | tuple[str, ...],
+    *,
+    label: str,
+) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != set(expected_fields):
+        raise EvaluationDataError(f"{label} must use the exact v0.2 schema")
+    return value
+
+
+def _is_finite_number(value: object) -> bool:
+    return (
+        not isinstance(value, bool)
+        and isinstance(value, int | float)
+        and math.isfinite(float(value))
+    )
+
+
+def _validate_reference_parameters(value: object) -> dict[str, Any]:
+    parameters = _require_exact_object_fields(
+        value,
+        _CURATED_PARAMETER_FIELDS,
+        label="curated reference parameters",
+    )
+    timeout = parameters["timeout_seconds"]
+    if (
+        not _is_finite_number(timeout)
+        or float(timeout) <= 0
+        or float(timeout) > MAX_LLM_TIMEOUT_SECONDS
+    ):
+        raise EvaluationDataError(
+            "curated reference timeout_seconds must be greater than 0 and at most "
+            f"{MAX_LLM_TIMEOUT_SECONDS:g}"
+        )
+    case_count = parameters["case_count"]
+    evidence_limit = parameters["evidence_limit"]
+    max_retries = parameters["max_retries"]
+    controls_valid = (
+        isinstance(case_count, int)
+        and not isinstance(case_count, bool)
+        and case_count == V02_EXPECTED_CASE_COUNTS["grounded_generation"]
+        and isinstance(evidence_limit, int)
+        and not isinstance(evidence_limit, bool)
+        and evidence_limit == 1
+        and parameters["store"] is False
+        and isinstance(max_retries, int)
+        and not isinstance(max_retries, bool)
+        and max_retries == 0
+    )
+    if not controls_valid:
+        raise EvaluationDataError(
+            "curated reference parameters violate required v0.2 content controls"
+        )
+    return parameters
+
+
+def _validate_latency_summary(value: object, *, case_count: int) -> dict[str, Any]:
+    latency = _require_exact_object_fields(
+        value,
+        _CURATED_LATENCY_FIELDS,
+        label="curated reference latency_summary",
+    )
+    total = latency["total_ms"]
+    average = latency["average_ms"]
+    if (
+        not _is_finite_number(total)
+        or not _is_finite_number(average)
+        or float(total) <= 0
+        or float(average) <= 0
+    ):
+        raise EvaluationDataError("curated reference latency values must be positive and finite")
+    expected_average = round(float(total) / case_count, 3)
+    if float(average) != expected_average:
+        raise EvaluationDataError(
+            "curated reference average_ms does not match total_ms and case_count"
+        )
+    return latency
+
+
+def _parse_utc_timestamp(value: object, *, label: str) -> datetime:
+    if not isinstance(value, str) or not value:
+        raise EvaluationDataError(f"{label} must be a non-empty ISO-8601 timestamp")
+    try:
+        timestamp = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise EvaluationDataError(f"{label} must be a valid ISO-8601 timestamp") from exc
+    if timestamp.tzinfo is None or timestamp.utcoffset() != timedelta(0):
+        raise EvaluationDataError(f"{label} must be timezone-aware UTC")
+    return timestamp
+
+
+def _validate_reference_timestamps(reference: dict[str, Any]) -> None:
+    source_created_at = _parse_utc_timestamp(
+        reference.get("source_created_at"),
+        label="curated reference source_created_at",
+    )
+    curated_at = _parse_utc_timestamp(
+        reference.get("curated_at"),
+        label="curated reference curated_at",
+    )
+    if curated_at <= source_created_at:
+        raise EvaluationDataError(
+            "curated reference curated_at must be later than source_created_at"
+        )
+
+
+def _validate_reference_metric_schema(reference: dict[str, Any]) -> None:
+    metrics = _require_exact_object_fields(
+        reference.get("metrics"),
+        _CURATED_METRIC_NAMES,
+        label="curated reference metrics",
+    )
+    for name in _CURATED_METRIC_NAMES:
+        expected_fields = (
+            _FINAL_METRIC_FIELDS
+            if name == "grounded_response_pass_rate"
+            else _AUTOMATED_METRIC_FIELDS
+        )
+        metric = _require_exact_object_fields(
+            metrics.get(name),
+            expected_fields,
+            label=f"curated reference metric {name!r}",
+        )
+        if not _is_finite_number(metric["score"]) or not 0 <= float(metric["score"]) <= 1:
+            raise EvaluationDataError(
+                f"curated reference metric {name!r} score must be between 0 and 1"
+            )
+        for count_field in ("passed", "total"):
+            count = metric[count_field]
+            if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+                raise EvaluationDataError(
+                    f"curated reference metric {name!r} {count_field} must be "
+                    "a non-negative integer"
+                )
+        if name == "grounded_response_pass_rate":
+            if metric["minimum"] != V02_LOCKED_MINIMUMS[name]:
+                raise EvaluationDataError(
+                    "curated grounded-response metric minimum differs from the frozen target"
+                )
+        else:
+            failures = metric["failures"]
+            if not isinstance(failures, list) or not all(
+                isinstance(failure, str) for failure in failures
+            ):
+                raise EvaluationDataError(
+                    f"curated reference metric {name!r} failures must be a string list"
+                )
+
+
 def _validate_reference_provenance(
     artifact: dict[str, Any],
     *,
@@ -1039,8 +1231,11 @@ def _validate_reference_provenance(
         raise EvaluationDataError(f"reference artifact_type must be {artifact_type!r}")
     if artifact.get("provider") != "openai":
         raise EvaluationDataError("v0.2 reference provider must be openai")
-    if not isinstance(artifact.get("model"), str) or not artifact["model"].strip():
-        raise EvaluationDataError("v0.2 reference model must be a non-empty string")
+    if artifact.get("model") != V02_REFERENCE_MODEL:
+        raise EvaluationDataError(
+            "v0.2 reference must use the pinned model "
+            f"{V02_REFERENCE_MODEL!r}; local model overrides cannot be curated"
+        )
     if artifact.get("prompt_version") != TemplateResponseGenerator.prompt_version:
         raise EvaluationDataError("v0.2 reference prompt version is not current")
     if artifact.get("corpus_hash") != compute_policy_corpus_hash():
@@ -1124,6 +1319,11 @@ def build_curated_reference(
         "latency_summary",
         _CURATED_LATENCY_FIELDS,
     )
+    _validate_reference_parameters(parameters)
+    _validate_latency_summary(
+        latency_summary,
+        case_count=V02_EXPECTED_CASE_COUNTS["grounded_generation"],
+    )
 
     total = len(curated_cases)
     final_score = passed / total if total else 0.0
@@ -1133,14 +1333,25 @@ def build_curated_reference(
             f"grounded_response_pass_rate={final_score:.6f} is below {minimum:.6f}"
         )
 
+    source_created_at = live_artifact.get("created_at")
+    _parse_utc_timestamp(source_created_at, label="live result created_at")
     timestamp = curated_at or datetime.now(UTC)
+    if timestamp.tzinfo is None or timestamp.utcoffset() != timedelta(0):
+        raise EvaluationDataError("curated_at must be timezone-aware UTC")
+    curated_timestamp = timestamp.astimezone(UTC).isoformat()
+    _validate_reference_timestamps(
+        {
+            "source_created_at": source_created_at,
+            "curated_at": curated_timestamp,
+        }
+    )
     source_metrics = live_artifact["metrics"]
     return {
         "schema_version": 1,
         "artifact_type": "v0.2-grounded-generation-reference",
         "release": "v0.2.0",
-        "source_created_at": live_artifact.get("created_at"),
-        "curated_at": timestamp.astimezone(UTC).isoformat(),
+        "source_created_at": source_created_at,
+        "curated_at": curated_timestamp,
         "provider": live_artifact["provider"],
         "model": live_artifact["model"],
         "prompt_version": live_artifact["prompt_version"],
@@ -1161,30 +1372,46 @@ def build_curated_reference(
         "fallbacks": {"total": 0, "by_reason": {}},
         "human_review": {
             "status": "complete",
-            "rubric": "0=unsafe-or-unsupported, 1=partial, 2=fully-grounded",
+            "rubric": _HUMAN_REVIEW_RUBRIC,
             "reviewed_cases": total,
             "required_cases": total,
         },
-        "known_limitations": [
-            "Single-turn Vietnamese policy benchmark over three synthetic Markdown files.",
-            "Human scores demonstrate the frozen 21-case set, not universal groundedness.",
-            "Order, ticket, and admin flows remain deterministic and outside the generator.",
-        ],
+        "known_limitations": list(_CURATED_KNOWN_LIMITATIONS),
         "cases": curated_cases,
     }
 
 
 def validate_curated_reference(reference: dict[str, Any]) -> None:
     """Reject stale, incomplete, or content-bearing committed references."""
+    _require_exact_object_fields(
+        reference,
+        _CURATED_REFERENCE_FIELDS,
+        label="curated reference top level",
+    )
     _validate_reference_provenance(
         reference,
         artifact_type="v0.2-grounded-generation-reference",
     )
-    human_review = reference.get("human_review")
-    if not isinstance(human_review, dict) or human_review.get("status") != "complete":
+    _validate_reference_timestamps(reference)
+    parameters = _validate_reference_parameters(reference.get("parameters"))
+    _validate_latency_summary(
+        reference.get("latency_summary"),
+        case_count=parameters["case_count"],
+    )
+    _validate_reference_metric_schema(reference)
+    human_review = _require_exact_object_fields(
+        reference.get("human_review"),
+        _HUMAN_REVIEW_FIELDS,
+        label="curated reference human_review",
+    )
+    if human_review["status"] != "complete":
         raise EvaluationDataError("curated reference human review must be complete")
+    if human_review["rubric"] != _HUMAN_REVIEW_RUBRIC:
+        raise EvaluationDataError("curated reference human-review rubric is not current")
     if reference.get("release") != "v0.2.0":
         raise EvaluationDataError("curated reference release must be v0.2.0")
+    if reference.get("known_limitations") != list(_CURATED_KNOWN_LIMITATIONS):
+        raise EvaluationDataError("curated reference known limitations are incomplete or stale")
     for name, minimum in (
         ("citation_coverage_rate", V02_LOCKED_MINIMUMS["citation_coverage_rate"]),
         ("citation_validity_rate", V02_LOCKED_MINIMUMS["citation_validity_rate"]),
@@ -1240,10 +1467,41 @@ def validate_curated_reference(reference: dict[str, Any]) -> None:
         raise EvaluationDataError("curated grounded-response metric does not match case scores")
 
 
-def load_committed_v02_reference() -> dict[str, Any] | None:
+def _require_reference_tracked_by_git(path: Path) -> None:
+    try:
+        relative_path = path.resolve().relative_to(ROOT.resolve()).as_posix()
+    except ValueError as exc:
+        raise EvaluationDataError("release reference must be inside the repository") from exc
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", "--", relative_path],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+    except OSError as exc:
+        raise EvaluationDataError(
+            "release gate could not verify the curated reference with Git"
+        ) from exc
+    if result.returncode != 0:
+        raise EvaluationDataError(
+            f"release gate requires {relative_path} to be tracked by Git; "
+            "add and review the curated artifact before retrying"
+        )
+
+
+def load_committed_v02_reference(*, required: bool = False) -> dict[str, Any] | None:
     """Load and validate the curated reference when one has been committed."""
     if not V02_REFERENCE.is_file():
+        if required:
+            raise EvaluationDataError(
+                "release gate requires eval/results/v0.2-reference.json with complete "
+                "human review; run the pinned-model live evaluation, score every case, "
+                "and curate the reviewed result first"
+            )
         return None
+    if required:
+        _require_reference_tracked_by_git(V02_REFERENCE)
     try:
         reference = json.loads(V02_REFERENCE.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -1589,6 +1847,11 @@ def main() -> int:
         help="Validate a reviewed var/eval live result and write the fixed v0.2 reference",
     )
     parser.add_argument(
+        "--require-reference",
+        action="store_true",
+        help="Fail unless the valid, human-reviewed v0.2 reference is Git-tracked",
+    )
+    parser.add_argument(
         "--check-baseline",
         type=Path,
         metavar="PATH",
@@ -1602,8 +1865,12 @@ def main() -> int:
         parser.error("--live applies only to --suite v0.2")
     if args.curate_reference is not None and args.suite != "v0.2":
         parser.error("--curate-reference applies only to --suite v0.2")
+    if args.require_reference and args.suite != "v0.2":
+        parser.error("--require-reference applies only to --suite v0.2")
     if args.live and args.curate_reference is not None:
         parser.error("--live and --curate-reference are mutually exclusive")
+    if args.require_reference and (args.live or args.curate_reference is not None):
+        parser.error("--require-reference cannot be combined with --live or --curate-reference")
     if args.curate_reference is not None and args.check_baseline is not None:
         parser.error("--curate-reference cannot be combined with --check-baseline")
 
@@ -1645,7 +1912,7 @@ def main() -> int:
             return 0 if artifact["automated_gate_passed"] else 1
 
         try:
-            report = build_v02_contract_report()
+            report = build_v02_contract_report(require_reference=args.require_reference)
         except EvaluationDataError as exc:
             print(f"Evaluation data error: {exc}", file=sys.stderr)
             return 2
