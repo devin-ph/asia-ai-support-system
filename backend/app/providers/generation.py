@@ -15,6 +15,7 @@ from openai import (
     APIError,
     APITimeoutError,
     AuthenticationError,
+    OpenAIError,
     PermissionDeniedError,
 )
 
@@ -166,6 +167,10 @@ class OpenAIGroundedResponseGenerator:
         except (AuthenticationError, PermissionDeniedError) as exc:
             raise ProviderAuthenticationError("response provider rejected authentication") from exc
         except (APIConnectionError, APIError) as exc:
+            raise ProviderUnavailableError("response provider is unavailable") from exc
+        except OpenAIError as exc:
+            # Any other SDK failure must still use the bounded template fallback
+            # instead of surfacing as an unhandled chat-route error.
             raise ProviderUnavailableError("response provider is unavailable") from exc
 
         output_text = getattr(response, "output_text", None)

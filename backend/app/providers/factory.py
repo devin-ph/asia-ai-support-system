@@ -15,6 +15,8 @@ from app.providers.generation import (
     TemplateResponseGenerator,
 )
 
+OPENAI_API_BASE_URL = "https://api.openai.com/v1"
+
 
 def build_response_generator(
     settings: Settings,
@@ -30,8 +32,11 @@ def build_response_generator(
             raise ProviderConfigurationError("openai response generator settings are incomplete")
         client = openai_client
         if client is None:
+            # Pin the endpoint so ambient SDK variables such as OPENAI_BASE_URL
+            # cannot silently redirect policy egress to another host.
             client = AsyncOpenAI(
                 api_key=settings.llm_api_key,
+                base_url=OPENAI_API_BASE_URL,
                 timeout=settings.llm_timeout_seconds,
                 max_retries=0,
             )
@@ -55,4 +60,4 @@ def build_response_runtime(
     )
 
 
-__all__ = ["build_response_generator", "build_response_runtime"]
+__all__ = ["OPENAI_API_BASE_URL", "build_response_generator", "build_response_runtime"]

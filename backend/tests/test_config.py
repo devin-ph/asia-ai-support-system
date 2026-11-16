@@ -14,7 +14,7 @@ from app.config import (
     load_settings,
 )
 from app.main import create_app
-from app.providers.factory import build_response_generator
+from app.providers.factory import OPENAI_API_BASE_URL, build_response_generator
 from app.providers.generation import (
     OpenAIGroundedResponseGenerator,
     TemplateResponseGenerator,
@@ -132,9 +132,42 @@ def test_factory_configures_one_bounded_sdk_attempt(
     assert isinstance(generator, OpenAIGroundedResponseGenerator)
     assert captured == {
         "api_key": "test-placeholder-not-a-real-key",
+        "base_url": OPENAI_API_BASE_URL,
         "timeout": 9.5,
         "max_retries": 0,
     }
+
+
+def test_factory_ignores_ambient_sdk_base_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://redirected.invalid/v1")
+    settings = load_settings(
+        {
+            RESPONSE_GENERATOR_ENV: "openai",
+            LLM_API_KEY_ENV: "test-placeholder-not-a-real-key",
+            LLM_MODEL_ENV: "gpt-5.4-mini-2026-03-17",
+        }
+    )
+
+    generator = build_response_generator(settings)
+
+    assert isinstance(generator, OpenAIGroundedResponseGenerator)
+    client = generator._client
+    assert str(client.base_url).rstrip("/") == OPENAI_API_BASE_URL  # type: ignore[attr-defined]
+
+
+def test_settings_repr_never_contains_the_api_key() -> None:
+    settings = load_settings(
+        {
+            RESPONSE_GENERATOR_ENV: "openai",
+            LLM_API_KEY_ENV: "test-placeholder-not-a-real-key",
+            LLM_MODEL_ENV: "gpt-5.4-mini-2026-03-17",
+        }
+    )
+
+    assert "test-placeholder-not-a-real-key" not in repr(settings)
+    assert "test-placeholder-not-a-real-key" not in str(settings)
 
 
 def test_factory_defensively_rejects_incomplete_openai_settings() -> None:

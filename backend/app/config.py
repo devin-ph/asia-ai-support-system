@@ -5,8 +5,8 @@ from __future__ import annotations
 import math
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass
-from enum import Enum
+from dataclasses import dataclass, field
+from enum import StrEnum
 
 RESPONSE_GENERATOR_ENV = "ASIA_RESPONSE_GENERATOR"
 LLM_API_KEY_ENV = "ASIA_LLM_API_KEY"
@@ -21,7 +21,7 @@ class ProviderConfigurationError(ValueError):
     """Raised when the selected provider cannot be configured safely."""
 
 
-class ResponseGeneratorName(str, Enum):
+class ResponseGeneratorName(StrEnum):
     """Supported response generator implementations."""
 
     TEMPLATE = "template"
@@ -33,7 +33,7 @@ class Settings:
     """Validated application settings with conditional provider requirements."""
 
     response_generator: ResponseGeneratorName
-    llm_api_key: str | None
+    llm_api_key: str | None = field(repr=False)
     llm_model: str | None
     llm_timeout_seconds: float
 

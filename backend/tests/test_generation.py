@@ -22,7 +22,7 @@ from app.providers.generation import (
     ProviderUnavailableError,
     TemplateResponseGenerator,
 )
-from openai import APIConnectionError, APITimeoutError, AuthenticationError
+from openai import APIConnectionError, APITimeoutError, AuthenticationError, OpenAIError
 
 _EVIDENCE_TEXT = "Khách hàng có thể yêu cầu đổi trả trong vòng 7 ngày."
 _ANSWER_PREFIX = "Theo thông tin chính sách hiện có:"
@@ -172,6 +172,20 @@ async def test_openai_connection_failure_is_mapped_to_unavailable(
 ) -> None:
     request = httpx.Request("POST", "https://api.openai.com/v1/responses")
     responses = _FakeResponsesAPI(error=APIConnectionError(request=request))
+    generator = OpenAIGroundedResponseGenerator(
+        _FakeOpenAIClient(responses),
+        model="test-model",
+    )
+
+    with pytest.raises(ProviderUnavailableError, match="unavailable"):
+        await generator.generate(generation_request)
+
+
+@pytest.mark.anyio
+async def test_other_openai_sdk_failure_is_mapped_to_unavailable(
+    generation_request: GroundedGenerationRequest,
+) -> None:
+    responses = _FakeResponsesAPI(error=OpenAIError("unexpected SDK failure"))
     generator = OpenAIGroundedResponseGenerator(
         _FakeOpenAIClient(responses),
         model="test-model",
