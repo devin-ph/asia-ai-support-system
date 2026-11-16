@@ -56,8 +56,8 @@ PROVIDER_ENV_KEYS = (
     "ASIA_LLM_TIMEOUT_SECONDS",
 )
 
-SUPPORTED_NODE_RANGE = "^20.19.0 || ^22.12.0"
-DEFAULT_NODE_MAJOR = 22
+SUPPORTED_NODE_RANGE = "^22.22.2 || ^24.15.0 || ^26.0.0"
+DEFAULT_NODE_MAJOR = 26
 REQUIRED_FRONTEND_SCRIPTS = ("test", "typecheck", "build", "e2e")
 
 _OBVIOUS_SECRET_RE = re.compile(
@@ -108,13 +108,13 @@ def _bold(text: str) -> str:
 
 
 def _check_python() -> bool:
-    """Check that the running Python is ≥ 3.10."""
+    """Check that the running Python is ≥ 3.12."""
     major, minor = sys.version_info[:2]
     version_str = f"{major}.{minor}.{sys.version_info[2]}"
-    if (major, minor) >= (3, 10):
+    if (major, minor) >= (3, 12):
         print(f"  {_green(_OK)} Python {version_str}")
         return True
-    print(f"  {_red(_FAIL)} Python {version_str} (need >= 3.10)")
+    print(f"  {_red(_FAIL)} Python {version_str} (need >= 3.12)")
     return False
 
 
@@ -131,16 +131,16 @@ def _parse_semantic_version(version: str) -> tuple[int, int, int] | None:
 
 
 def _node_version_supported(version: str) -> bool:
-    """Return whether a Node version satisfies Vite 7's engine range."""
+    """Return whether a Node version is a reviewed, supported LTS line."""
     parsed = _parse_semantic_version(version)
     if parsed is None:
         return False
     major, minor, patch = parsed
-    if major == 20:
-        return (major, minor, patch) >= (20, 19, 0)
     if major == 22:
-        return (major, minor, patch) >= (22, 12, 0)
-    return False
+        return (major, minor, patch) >= (22, 22, 2)
+    if major == 24:
+        return (major, minor, patch) >= (24, 15, 0)
+    return major == 26
 
 
 def _check_default_node_version() -> bool:
@@ -1138,6 +1138,16 @@ def _python_security_commands() -> tuple[tuple[str, list[str]], ...]:
     )
 
 
+def _frontend_security_commands(npm: str) -> tuple[tuple[str, list[str]], ...]:
+    """Return the opt-in audit of the locked frontend dependency graph."""
+    return (
+        (
+            "Frontend vulnerability audit",
+            [npm, "audit", "--audit-level=moderate"],
+        ),
+    )
+
+
 def _evaluation_verification_commands(
     *,
     require_reference: bool = False,
@@ -1196,6 +1206,18 @@ def cmd_verify(args: argparse.Namespace) -> int:
                     _run_verification_command(label, command, cwd=ROOT),
                 )
             )
+        security_npm = _npm_command()
+        if security_npm is None:
+            print(_red(f"\n{_FAIL} npm not found on PATH."))
+            results.append(("Frontend vulnerability audit", False))
+        else:
+            for label, command in _frontend_security_commands(security_npm):
+                results.append(
+                    (
+                        label,
+                        _run_verification_command(label, command, cwd=FRONTEND_DIR),
+                    )
+                )
 
     results.append(
         (

@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.intent import IntentLabel, SentimentLabel
 
 
-class ActionStatus(str, enum.Enum):
+class ActionStatus(enum.StrEnum):
     """Lifecycle states for a proposed action."""
 
     PENDING = "pending"
@@ -18,20 +18,20 @@ class ActionStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
-class ActionType(str, enum.Enum):
+class ActionType(enum.StrEnum):
     """Write actions supported by this milestone."""
 
     CREATE_TICKET = "create_ticket"
 
 
-class ToolName(str, enum.Enum):
+class ToolName(enum.StrEnum):
     """Read-only tools that may run during chat."""
 
     POLICY_SEARCH = "policy_search"
     ORDER_LOOKUP = "order_lookup"
 
 
-class ToolEventStatus(str, enum.Enum):
+class ToolEventStatus(enum.StrEnum):
     """Customer-safe outcomes for chat tool events."""
 
     COMPLETED = "completed"

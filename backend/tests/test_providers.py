@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import fields
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import httpx
@@ -111,7 +111,7 @@ class FakeOrdersProvider:
                     7,
                     5,
                     8,
-                    tzinfo=timezone.utc,
+                    tzinfo=UTC,
                 ),
             ),
             lookup_performed=True,

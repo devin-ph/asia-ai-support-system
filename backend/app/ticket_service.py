@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
 
@@ -93,7 +93,7 @@ class TicketService:
                 ticket_id=f"tkt_{uuid.uuid4().hex[:12]}",
                 action_id=action_id,
                 summary=record.summary,
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
             )
             save_tickets(
                 (*self._tickets.values(), ticket),

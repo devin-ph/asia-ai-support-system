@@ -8,7 +8,7 @@ import unicodedata
 from dataclasses import dataclass
 
 
-class IntentLabel(str, enum.Enum):
+class IntentLabel(enum.StrEnum):
     """Supported customer-support intents."""
 
     ORDER_LOOKUP = "order_lookup"
@@ -19,7 +19,7 @@ class IntentLabel(str, enum.Enum):
     OTHER = "other"
 
 
-class SentimentLabel(str, enum.Enum):
+class SentimentLabel(enum.StrEnum):
     """Supported coarse sentiment labels."""
 
     POSITIVE = "positive"

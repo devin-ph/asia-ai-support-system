@@ -16,7 +16,7 @@ globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
 }) as typeof globalThis.fetch;
 
 beforeAll(() => {
-  server.listen({ onUnhandledRequest: "error" });
+  server.listen({ onUnhandledFrame: "error" });
 });
 
 afterEach(() => {

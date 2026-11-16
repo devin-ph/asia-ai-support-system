@@ -40,16 +40,21 @@ def _clear_provider_environment(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.parametrize(
     ("version", "supported"),
     [
-        ("v20.18.1", False),
-        ("v20.19.0", True),
-        ("v20.20.0", True),
+        ("v20.19.0", False),
+        ("v20.20.0", False),
         ("v21.7.3", False),
-        ("v22.11.0", False),
-        ("v22.12.0", True),
+        ("v22.12.0", False),
+        ("v22.22.1", False),
+        ("v22.22.2", True),
         ("v22.99.0", True),
         ("v23.0.0", False),
         ("v24.0.0", False),
+        ("v24.14.9", False),
+        ("v24.15.0", True),
         ("v25.8.1", False),
+        ("v26.0.0", True),
+        ("v26.13.0", True),
+        ("v27.0.0", False),
         ("not-a-version", False),
     ],
 )
@@ -60,17 +65,17 @@ def test_node_version_matches_vite_engine_range(
     assert DEV._node_version_supported(version) is supported
 
 
-def test_default_node_version_file_selects_node_22(
+def test_default_node_version_file_selects_node_26(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     version_file = tmp_path / ".nvmrc"
     monkeypatch.setattr(DEV, "NODE_VERSION_FILE", version_file)
 
-    version_file.write_text("22\n", encoding="utf-8")
+    version_file.write_text("26\n", encoding="utf-8")
     assert DEV._check_default_node_version() is True
 
-    version_file.write_text("25\n", encoding="utf-8")
+    version_file.write_text("22\n", encoding="utf-8")
     assert DEV._check_default_node_version() is False
 
 
@@ -574,6 +579,15 @@ def test_python_security_gate_uses_active_interpreter_and_locked_requirements() 
                 "-r",
                 "backend/requirements.txt",
             ],
+        ),
+    )
+
+
+def test_frontend_security_gate_audits_the_locked_npm_graph() -> None:
+    assert DEV._frontend_security_commands("npm") == (
+        (
+            "Frontend vulnerability audit",
+            ["npm", "audit", "--audit-level=moderate"],
         ),
     )
 
