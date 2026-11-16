@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted; runtime authentication handling amended on 2026-07-15.
+Accepted; runtime authentication handling amended on 2026-07-15. Amended
+2026-11-16: the SDK moved to major version 3 and the endpoint is pinned
+explicitly. Extended for v0.3 by ADR-008.
 
 ## Context
 
@@ -28,7 +30,8 @@ external generator.
   every live evaluation artifact must record the model actually used. Reference
   curation rejects any artifact that does not use this exact snapshot.
 - Network calls use `AsyncOpenAI` and the Responses API with no tools and
-  `store=False`. The model returns answer text only; the application attaches
+  `store=False`. The base URL is set explicitly, so ambient SDK variables such
+  as `OPENAI_BASE_URL` cannot redirect egress. The model returns answer text only; the application attaches
   citation metadata from the retrieved evidence.
 - The request contains only generation instructions, a redacted policy query,
   and allowlisted policy evidence. Order, ticket, customer, conversation,

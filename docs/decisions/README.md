@@ -16,3 +16,6 @@ contracts remain in `docs/demo-scope.md`, evaluation thresholds remain under
 | [004](004-synthetic-data-only-in-v01.md) | Synthetic data only in v0.1 | Accepted |
 | [005](005-openai-responses-for-grounded-generation.md) | OpenAI Responses API for grounded generation | Accepted |
 | [006](006-local-h2-policy-retrieval.md) | Local H2 policy retrieval | Accepted |
+| [007](007-benchmark-over-support-product.md) | Benchmark over support product | Accepted for v0.3.0 |
+| [008](008-openai-compatible-adapter-for-local-models.md) | OpenAI-compatible adapter for local models | Accepted for v0.3.0 |
+| [009](009-agent-authorization-gateway-future-work.md) | Agent authorization gateway as future work | Proposed |

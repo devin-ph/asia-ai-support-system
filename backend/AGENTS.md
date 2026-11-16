@@ -5,8 +5,10 @@ These instructions apply to all files under `backend/`.
 ## Purpose
 
 The backend preserves the deterministic API contract while implementing the
-`v0.2.0: Evidence-Grounded Policy Assistant` milestone. Read
-`../docs/demo-scope.md` and `../eval/README.md` before changing behavior.
+`v0.2.0: Evidence-Grounded Policy Assistant` milestone. It is also the
+Reference System for the planned v0.3.0 benchmark; do not start v0.3 work
+before the `v0.2.0` tag exists. Read `../docs/demo-scope.md`,
+`../eval/README.md`, and `../GLOSSARY.md` before changing behavior.
 
 ## Architecture
 
@@ -56,6 +58,9 @@ Keep route handlers thin. Business rules belong in dedicated services or
   after sufficient allowlisted evidence exists.
 - External provider input is limited to a redacted policy query, allowlisted
   evidence text, and generation instructions.
+- Pin every external endpoint explicitly in code; ambient SDK variables such as
+  `OPENAI_BASE_URL` must never redirect provider egress.
+- Keep secrets out of `repr()`, logs, exceptions, and evaluation artifacts.
 - Never send order results, ownership data, ticket payloads, pending actions,
   admin state, conversation history, or raw logs to an external provider.
 - Chat may call `draft_ticket` but must never execute or persist a ticket.
@@ -132,7 +137,7 @@ depend on execution order.
 
 ## Style
 
-- Target Python 3.10 or newer.
+- Target Python 3.12 or newer; CI covers 3.12 and 3.14.
 - Prefer small typed functions and explicit enums over unstructured strings.
 - Keep user-facing Vietnamese natural and correctly accented.
 - Keep code and identifiers in English.

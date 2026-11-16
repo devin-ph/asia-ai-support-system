@@ -1,12 +1,18 @@
 # A.S.I.A
 
-**AI Support & Insight Analytics System**
+**Agent Safety & Integrity Assessment**
 
-A.S.I.A is a local Vietnamese e-commerce support demo built with FastAPI and
-React. v0.1.1 proves four customer-support flows with deterministic behavior
-and synthetic data. The current development milestone is **v0.2.0:
-Evidence-Grounded Policy Assistant**; its scope, evaluation contract, and target
-metrics are frozen before feature implementation.
+> A Vietnamese benchmark and reference design for customer-support agents that
+> must cite, refuse, and never act without confirmation.
+
+A.S.I.A is moving from a support demo to a safety benchmark. The current
+release candidate, **v0.2.0: Evidence-Grounded Policy Assistant**, ships the
+**Reference System**: a local Vietnamese e-commerce support demo built with
+FastAPI and React, with four flows, deterministic guardrails, and synthetic
+data. The planned **v0.3.0** milestone measures that least-authority design
+against a tool-calling Baseline Agent across several pinned models. See
+[v0.3 direction](#v03-direction). Scope, evaluation contracts, and target
+metrics are frozen before each milestone's implementation.
 
 > **Demo-ready is not production-ready.** The repository has no authentication,
 > tenant isolation, production database, cloud deployment, or real customer
@@ -30,13 +36,13 @@ wrapper, and falls back to the deterministic template for any invalid output.
 Retrieval, citations, routing, and all write guardrails remain
 application-controlled.
 This safety boundary does not change the public API. The optional LLM analyzer
-is deferred to v0.2.1.
+is deferred to v0.3.0.
 
 ## Technology
 
-- Python 3.10+, FastAPI, Pydantic, Pytest, HTTPX, and Ruff
-- OpenAI Python SDK for the optional Responses API adapter
-- React 19, TypeScript, Vite, Vitest, and Playwright
+- Python 3.12+, FastAPI, Pydantic, Pytest, HTTPX, and Ruff
+- OpenAI Python SDK 3 for the optional Responses API adapter
+- React 19, TypeScript 7, Vite 8, Vitest 5, MSW 3, and Playwright
 - Trusted Markdown policy documents and validated synthetic JSON fixtures
 - Process-local pending actions and counters; ignored local ticket storage
 
@@ -44,9 +50,9 @@ is deferred to v0.2.1.
 
 ### Prerequisites
 
-- Python 3.10 or newer
-- Node.js `^22.12.0` LTS, selected by `.nvmrc`
-- Node.js `^20.19.0` is also supported for compatibility
+- Python 3.12 or newer (CI covers 3.12 and 3.14)
+- Node.js 26 LTS, selected by `.nvmrc`
+- Node.js `^22.22.2` and `^24.15.0` LTS are also supported (CI covers 22 and 26)
 - npm
 
 Create a Python virtual environment and activate it.
@@ -142,7 +148,7 @@ Run project commands from the repository root.
 | `python scripts/dev.py eval --suite v0.2 --curate-reference <live-result>` | Validate a human-scored live run and write the fixed release reference |
 | `python scripts/dev.py eval --suite v0.2 --require-reference` | Fail unless the Git-tracked reference is current and its human review is complete |
 | `python scripts/dev.py verify` | Run the full pre-commit verification gate |
-| `python scripts/dev.py verify --security` | Add a vulnerability audit of locked Python dependencies |
+| `python scripts/dev.py verify --security` | Add vulnerability audits of the locked Python and npm dependency graphs |
 | `python scripts/dev.py verify --release` | Run the release-evidence sub-gate: security audit, tracked reference, `main`, and clean tree |
 
 `verify` covers Python lint and formatting, backend and frontend tests, the
@@ -150,7 +156,7 @@ frozen v0.1 regression, v0.2 offline gates, TypeScript checks, the production
 frontend build, fixture/runtime hygiene, obvious secret assignments, and Git
 whitespace errors. It is a pre-commit/PR gate and deliberately does not claim
 tag readiness. `verify --release` is the release-evidence sub-gate: it also runs
-the Python dependency audit and fails until the pinned-model reference is
+the Python and npm dependency audits and fails until the pinned-model reference is
 human-reviewed, tracked by Git, current on `main`, and the tree is clean. It
 does not run `doctor` or browser E2E; those remain separate final-sequence
 commands.
@@ -311,8 +317,10 @@ default.
 
 Local H2 retrieval, grounded template generation, redaction, no-evidence
 no-call behavior, safe provider fallback, and application-owned citations now
-pass their offline gates. Local release hardening, the security audit, and all
-four original E2E flows also pass. The remaining v0.2 gate is a genuine
+pass their offline gates. A November 2026 maintenance pass refreshed the
+toolchain and dependencies (Python 3.12+, Node 22/24/26 LTS, OpenAI SDK 3,
+Vite 8, TypeScript 7) and cleared both dependency audits, so every final gate
+must be rerun on the release SHA. The remaining v0.2 gate is a genuine
 external reference run with complete human review, followed by review and a
 clean release tree. These steps do not introduce new product flows or broaden
 model authority.
@@ -323,8 +331,38 @@ pending required gate before tagging.
 
 Authentication, deployment, multi-tenant behavior, production storage, vector
 infrastructure, external embeddings, real commerce data, model-controlled write
-actions, and UI expansion remain out of scope. The LLM analyzer is a possible
-v0.2.1 milestone, not a v0.2.0 release dependency. Exact product boundaries
-live in [`docs/demo-scope.md`](docs/demo-scope.md); evaluation gates live in
-[`eval/baseline.v0.2.target.json`](eval/baseline.v0.2.target.json) and
+actions, and UI expansion remain out of scope. The LLM analyzer is part of the
+planned v0.3.0 milestone, not a v0.2.0 release dependency. Exact product
+boundaries live in [`docs/demo-scope.md`](docs/demo-scope.md); evaluation gates
+live in [`eval/baseline.v0.2.target.json`](eval/baseline.v0.2.target.json) and
 [`eval/README.md`](eval/README.md).
+
+## v0.3 direction
+
+v0.3.0 starts after the `v0.2.0` tag. It turns the project into a Vietnamese
+support-agent safety benchmark.
+[ADR-007](docs/decisions/007-benchmark-over-support-product.md) records why the
+benchmark replaced further support-product growth.
+
+- **What is scored:** configurations under test, each one architecture paired
+  with one pinned model. The Reference System, where the model only proposes,
+  is compared with a Baseline Agent that calls tools directly under the
+  strongest defensive prompt available.
+- **Models:** two local open models through an OpenAI-compatible endpoint, and
+  one pinned API model chosen by a small pilot
+  ([ADR-008](docs/decisions/008-openai-compatible-adapter-for-local-models.md)).
+- **Cases:** about 300 synthetic Vietnamese cases covering grounded answers,
+  refusals, direct and indirect injection, cross-customer probing, and
+  unauthorized actions. About 30% are written without diacritics, in teencode,
+  or in Vietnamese-English code-switching.
+- **Scoring:** violation rate per invariant, measured by deterministic oracles
+  with no model as judge, reported next to task success and over-refusal.
+- **Gate:** zero Reference System violations across every attack case and
+  every model.
+- **Publication:** a static benchmark report, plus a template-mode playground.
+
+An agent authorization gateway is recorded as proposed future work in
+[ADR-009](docs/decisions/009-agent-authorization-gateway-future-work.md).
+The full v0.3.0 contract lives in
+[`docs/demo-scope.md`](docs/demo-scope.md#planned-milestone-v030-vietnamese-support-agent-safety-benchmark),
+and terminology lives in [`GLOSSARY.md`](GLOSSARY.md).

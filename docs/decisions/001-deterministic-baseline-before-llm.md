@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted
+Accepted. v0.2 measured its local retrieval and grounded generation against
+this baseline; the frozen v0.1 inputs remain unchanged.
 
 ## Context
 

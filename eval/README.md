@@ -126,7 +126,7 @@ exist as an H2 in the current policy corpus.
 
 ### Local retrieval benchmark
 
-The Phase 2 retriever is deliberately small and offline:
+The v0.2 local retriever is deliberately small and offline:
 
 - it loads exactly the three allowlisted policy files and treats each H2 as one
   evidence unit;

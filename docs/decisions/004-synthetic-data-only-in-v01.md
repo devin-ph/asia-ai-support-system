@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted
+Accepted. Introduced in v0.1 and reaffirmed for every later milestone,
+including the v0.3 benchmark datasets and attack corpus.
 
 ## Context
 

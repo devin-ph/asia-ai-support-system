@@ -18,7 +18,9 @@ Preserve the four local demo flows while upgrading policy support:
 
 Order, ticket, and admin behavior remains deterministic. An optional external
 generator is limited to supported policy answers. The LLM analyzer is deferred
-to v0.2.1.
+to the planned v0.3.0 benchmark milestone, which starts only after the
+`v0.2.0` tag; its contract lives in `docs/demo-scope.md` and its terminology in
+`GLOSSARY.md`.
 
 ## Source of Truth
 

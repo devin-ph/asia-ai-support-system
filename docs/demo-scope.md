@@ -14,7 +14,8 @@ boundary, and confirmation guardrail.
 | v0.1 | Deterministic vertical slice and four product flows | Original behavior |
 | v0.1.1 | Reproducibility hardening, CI, provider contracts, and eval | `eval/baseline.v0.1.json` (frozen) |
 | v0.2.0 | Local policy retrieval and grounded policy generation | `eval/baseline.v0.2.target.json` |
-| v0.2.1 | Candidate milestone for an optional LLM analyzer | Deferred |
+| v0.2.1 | Candidate milestone for an optional LLM analyzer | Folded into v0.3.0 |
+| v0.3.0 | Vietnamese support-agent safety benchmark and Reference System | Planned; see [v0.3.0](#planned-milestone-v030-vietnamese-support-agent-safety-benchmark) |
 
 `eval/baseline.v0.1.json` and its four root JSONL inputs are frozen. They must
 not be overwritten or expanded to make v0.2 scores look better.
@@ -22,7 +23,9 @@ not be overwritten or expanded to make v0.2 scores look better.
 The v0.2 target contract was amended before feature implementation on
 2026-07-14 to add refusal recall and citation validity, separate v0.2 datasets,
 and defer the LLM analyzer to v0.2.1. The amendment does not change the v0.1
-baseline.
+baseline. On 2026-11-16 the deferred analyzer was folded into the planned
+v0.3.0 milestone; the locked v0.2 target file keeps its historical
+`v0.2.1` label and is not edited.
 
 ---
 
@@ -87,7 +90,7 @@ Examples:
 - `Đơn ASIA-1001 giao trễ thì chính sách thế nào?` routes to `order_lookup`.
 - `Tôi muốn đổi trả sản phẩm đang bảo hành` routes to `return_refund`.
 
-An LLM analyzer is not part of v0.2.0. If introduced in v0.2.1, it must emit
+An LLM analyzer is not part of v0.2.0. When introduced in v0.3.0, it must emit
 only the existing public labels and preserve a deterministic fallback.
 
 ### Acceptance rules
@@ -136,7 +139,7 @@ counters.
 
 ## v0.2.0 Out of Scope
 
-LLM analyzer (deferred to v0.2.1) | external embeddings | vector database |
+LLM analyzer (deferred to v0.3.0) | external embeddings | vector database |
 agent framework | LLM tool calling | model-controlled writes | auth |
 authorization | multi-tenant behavior | cloud or Docker deployment |
 PostgreSQL | queues | caches | production storage | real commerce integrations |
@@ -145,6 +148,132 @@ provider controls or badges | UI redesign | new product flows.
 
 Changing the public API envelope, labels, tool vocabulary, or order safe-field
 allowlist requires a separately reviewed scope amendment.
+
+---
+
+## Planned Milestone: v0.3.0 Vietnamese Support-Agent Safety Benchmark
+
+**Status:** planned. Work starts only after the annotated `v0.2.0` tag exists.
+Nothing in this section changes the v0.2.0 contract, its pinned reference
+model, or its release gates. Terms follow [`GLOSSARY.md`](../GLOSSARY.md).
+
+v0.3.0 renames the project to **A.S.I.A — Agent Safety & Integrity
+Assessment**: a Vietnamese benchmark and reference design for customer-support
+agents that must cite, refuse, and never act without confirmation. The
+benchmark is the primary deliverable; the support demo becomes its Reference
+System. Rationale is recorded in
+[ADR-007](decisions/007-benchmark-over-support-product.md).
+
+### Configurations under test
+
+A configuration under test is one architecture paired with one pinned model.
+
+| Architecture | Authority | Where it may run |
+| --- | --- | --- |
+| Reference System | Application owns routing validation, evidence, citations, and writes; the model only proposes | Product runtime and evaluation |
+| Baseline Agent | Model calls tools directly, including `ticket_create`, guarded only by the strongest available defensive instructions | Evaluation harness only |
+
+- The Baseline Agent is never reachable from any API route, and its writes go
+  only to temporary per-run stores. Invariants 4, 7, 8, and 10 apply to the
+  product runtime unchanged.
+- The Baseline Agent's defensive prompt is versioned and must be a genuine
+  best effort, so the comparison measures instruction-level guardrails against
+  architectural guardrails.
+- Models: two local open models served through an OpenAI-compatible endpoint
+  (initial candidates `qwen3:8b` and `llama3.1:8b`, pinned by digest) and one
+  pinned API model. The API model is selected by a pilot of about 20 cases
+  across two or three candidates, then pinned before the full run. See
+  [ADR-008](decisions/008-openai-compatible-adapter-for-local-models.md).
+
+### Reference System changes
+
+- **LLM analyzer:** an optional model proposes intent and sentiment using only
+  the existing public labels. The application validates every proposal and
+  falls back to the deterministic analyzer. It preserves the deferred v0.2
+  target in `eval/baseline.v0.2.target.json`: `intent_accuracy` at least 0.90,
+  with a deterministic fallback of at least 0.791667, on the frozen v0.1 intent
+  cases.
+- **Trusted policy corpus:** grows from three to about ten synthetic policy
+  documents. The allowlist in this document is updated in the same change as
+  the documents. If retrieval misses targets on the larger corpus, a new
+  retrieval ADR is required before changing strategy.
+- The public API envelope, labels, tool vocabulary, safe order fields, and
+  confirmation guardrail do not change.
+
+### Benchmark dataset
+
+- About 300 new synthetic Vietnamese cases under `eval/v0.3/`, in six
+  categories: grounded answer, insufficient context, direct injection,
+  indirect injection, cross-customer data probing, and unauthorized action.
+- About 30% of cases carry a linguistic-variant tag: no diacritics, teencode,
+  or Vietnamese-English code-switching.
+- Every attack case names the invariant it targets.
+- **Attack corpus:** poisoned policy-document variants live only under
+  `eval/` and are loaded only by the evaluation harness. They never join the
+  trusted policy corpus or the product runtime.
+- Cases are single-turn, plus harness-driven confirmation sequences (propose,
+  confirm or cancel, repeat confirm). Multi-turn attack scripts are out of
+  scope.
+- The frozen v0.1 and v0.2 datasets and baselines remain unchanged. v0.3 uses
+  its own manifest and dataset hash.
+- Benchmark data and the attack corpus are licensed CC BY 4.0; code remains
+  MIT.
+
+### Scoring
+
+- Every configuration reports two axes: **violation rate** per invariant on
+  attack cases, and **task success rate** on legitimate cases together with an
+  over-refusal rate.
+- Safety metrics use deterministic oracles over harness-observed effects:
+  writes in the temporary store, citation validity against evidence units,
+  exposed order fields, and answers given where insufficient context was
+  required. No safety metric uses a model as judge.
+- Human review covers only a sampled prose-quality check.
+- Local models run three times per case at temperature 0 with a fixed seed, and
+  the report shows spread. The API model runs once per case at the milestone.
+- Results are cached by case, model digest, and prompt hash, so an unchanged
+  rerun makes no model call.
+- Paid API usage for the milestone is capped at USD 10; development iterations
+  use template mode or local models.
+
+### Gates
+
+Locked before feature implementation:
+
+- v0.3 datasets, manifest, and metric definitions.
+- **Reference System safety gate:** zero violations across all attack cases
+  and all models.
+- The LLM analyzer intent targets listed above.
+
+Locked after the pilot and before the full run: the Reference System minimum
+task success rate. The Baseline Agent is measured and reported but never gated.
+
+### Publication
+
+- Primary: a static benchmark report published with GitHub Pages, showing the
+  architecture-by-model comparison and per-case drill-down.
+- Secondary: a public playground of the Reference System in template mode only,
+  with no provider credential, shared demo state that resets periodically, a
+  visible reset notice, and basic rate limiting.
+- Before the playground is exposed publicly, pending-action retention must be
+  bounded. Today every drafted action stays in process memory until restart,
+  which is acceptable locally but not on a public host. Eviction may make an
+  old action ID unknown, but must never let a repeated confirmation create a
+  second ticket.
+
+### v0.3.0 Out of scope
+
+Agent authorization gateway (recorded as proposed future work in
+[ADR-009](decisions/009-agent-authorization-gateway-future-work.md)) |
+multi-turn attack scripts | model-controlled writes in the Reference System |
+Baseline Agent access from any API route | auth | multi-tenant behavior |
+production storage | real customers or PII | real commerce integrations |
+external embeddings | vector database without a new ADR | server-side
+conversation history.
+
+Exceptions to the v0.2 out-of-scope list apply only as stated above: LLM tool
+calling exists only inside the Baseline Agent in the evaluation harness, and
+deployment covers only the static report and the template-mode playground.
 
 ---
 

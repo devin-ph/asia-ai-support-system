@@ -9,7 +9,9 @@ The frontend remains a minimal React and TypeScript interface for the
 existing demo flows (policy chat, order lookup, ticket confirmation, admin
 overview) and connects exclusively to the local backend API.
 
-Read `../docs/demo-scope.md` before changing behavior.
+Read `../docs/demo-scope.md` before changing behavior. The planned v0.3.0
+benchmark is published as a separate static report; it does not expand this
+demo UI.
 
 v0.2 does not add provider controls, provider badges, AI counters, or a UI
 redesign. Frontend changes are limited to preserving compatibility and showing
@@ -63,9 +65,14 @@ add frontend-only fields to API types.
 - React and ReactDOM are the only runtime dependencies.
 - Frontend unit/component test tooling uses Vitest, React Testing Library,
   jsdom, and MSW. Browser E2E coverage uses Playwright.
-- Node.js 22 LTS is the repository default selected by `../.nvmrc`.
-- Node.js must satisfy `^20.19.0 || ^22.12.0`; odd and future major versions
-  are intentionally unsupported until they are reviewed and added explicitly.
+- Node.js 26 LTS is the repository default selected by `../.nvmrc`.
+- Node.js must satisfy `^22.22.2 || ^24.15.0 || ^26.0.0`, the intersection of
+  supported LTS lines and the toolchain's engine ranges (jsdom sets the
+  minor floors). Odd and future major versions are intentionally unsupported
+  until they are reviewed and added explicitly in `package.json`,
+  `scripts/dev.py`, and CI together.
+- Current toolchain majors: React 19, TypeScript 7, Vite 8, Vitest 5, MSW 3,
+  jsdom 31, and Playwright 1.65 (pinned exactly).
 - Install the locked dependency graph with `npm ci`.
 - Do not add Redux, Zustand, TanStack Query, Tailwind, or any UI component
   library in this milestone.

@@ -1,11 +1,15 @@
 # ML
 
-Reserved for future milestones. This directory is currently empty.
+Reserved. This directory is intentionally empty.
 
-Planned contents include optional model adapters, prompt templates, and
-retrieval configurations. These components must satisfy the provider contracts
-defined in `backend/app/providers/` and pass the committed deterministic
-baseline in `eval/` before replacing the v0.1 keyword rules.
+Model adapters do not live here. The v0.2 OpenAI adapter and the planned v0.3
+OpenAI-compatible adapter for local models sit behind the narrow provider seam
+in `backend/app/providers/`
+([ADR-005](../docs/decisions/005-openai-responses-for-grounded-generation.md),
+[ADR-008](../docs/decisions/008-openai-compatible-adapter-for-local-models.md)).
+Benchmark datasets, the attack corpus, and Baseline Agent prompts belong under
+`eval/`, which is versioned and hash-locked.
 
-See [`docs/demo-scope.md`](../docs/demo-scope.md) for what is explicitly
-excluded from the current milestone.
+Use this directory only if a later milestone needs model artifacts that fit
+neither place, and record that decision in an ADR first. See
+[`docs/demo-scope.md`](../docs/demo-scope.md) for current scope.

@@ -2,7 +2,10 @@
 
 ## Status
 
-Accepted
+Accepted. Amended 2026-11-16: the policy default is now local H2 retrieval
+with grounded generation (ADR-006, ADR-005). The v0.3 Baseline Agent is a
+deliberate, evaluation-only counterexample to this decision (ADR-007); the
+product runtime keeps these boundaries without exception.
 
 ## Context
 
@@ -18,7 +21,7 @@ Use **four narrow provider boundaries** instead of a generic agent:
 | Boundary | Capability | Default |
 |----------|-----------|---------|
 | Analyzer | Intent + sentiment classification | Deterministic keyword rules |
-| Policy | Grounded policy retrieval | Allowlisted keyword search |
+| Policy | Grounded policy retrieval | Allowlisted keyword search in v0.1; local H2 retrieval since v0.2 |
 | Orders | Safe order lookup | Synthetic fixture lookup |
 | Tickets | Guarded ticket lifecycle | Local ticket service |
 

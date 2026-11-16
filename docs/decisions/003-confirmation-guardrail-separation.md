@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted
+Accepted. Applies to every milestone. The v0.3 Baseline Agent breaks this
+separation only inside the evaluation harness, against temporary stores, to
+measure what the separation prevents (ADR-007).
 
 ## Context
 
