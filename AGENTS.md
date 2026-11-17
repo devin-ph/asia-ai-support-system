@@ -2,93 +2,41 @@
 
 ## Project
 
-A.S.I.A is a demo AI customer support system for Vietnamese e-commerce support.
+A.S.I.A is a Vietnamese customer-support demo built to show least-authority AI:
+the application owns evidence, citations, and every write, and the model only
+proposes. The current milestone is **v0.2.0: Evidence-Grounded Policy
+Assistant**. The planned **v0.3.0** turns it into a Vietnamese support-agent
+safety benchmark and starts only after the `v0.2.0` tag.
 
-The current milestone is **v0.2.0: Evidence-Grounded Policy Assistant**.
+## Read first
 
-## Current Goal
+1. [`docs/demo-scope.md`](docs/demo-scope.md): the product contract and the
+   only source of truth for scope, API, labels, and invariants.
+2. [`GLOSSARY.md`](GLOSSARY.md): canonical terms. Use them, and do not
+   introduce synonyms.
+3. [`eval/README.md`](eval/README.md) when touching evaluation.
+4. `backend/AGENTS.md` or `frontend/AGENTS.md` when working in those folders.
 
-Preserve the four local demo flows while upgrading policy support:
-
-1. Vietnamese policy questions with local evidence retrieval, grounded answers,
-   and application-owned citations.
-2. Synthetic order lookup for a fixed demo customer.
-3. Support ticket drafting with explicit user confirmation.
-4. Basic admin overview showing message, ticket, intent, sentiment, and tool counts.
-
-Order, ticket, and admin behavior remains deterministic. An optional external
-generator is limited to supported policy answers. The LLM analyzer is deferred
-to the planned v0.3.0 benchmark milestone, which starts only after the
-`v0.2.0` tag; its contract lives in `docs/demo-scope.md` and its terminology in
-`GLOSSARY.md`.
-
-## Source of Truth
-
-Read documents in this order:
-
-1. `docs/demo-scope.md`
-2. `README.md`
-3. `backend/AGENTS.md` when working inside `backend/`
-4. `frontend/AGENTS.md` when working inside `frontend/`
-
-Do not implement features outside `docs/demo-scope.md` unless the user explicitly requests them.
-
-Keep planning lightweight. README may summarize near-term direction, while
-durable technical choices belong in focused ADRs under `docs/decisions/`. Do
-not create parallel implementation specifications that restate scope, metrics,
-invariants, or accepted ADRs.
-
-Any change to required flows, API shapes, intent or sentiment labels, tool
-semantics, storage behavior, safety invariants, or milestone acceptance
-criteria must update `docs/demo-scope.md` in the same change. If the product
-contract is unaffected, do not edit the scope document merely for churn.
+Do not build features outside the scope document unless the user asks. When a
+change touches the API, labels, tool semantics, storage behavior, invariants,
+evaluation datasets, or acceptance criteria, update `docs/demo-scope.md` in the
+same change. Record durable technical choices as short ADRs in
+`docs/decisions/`. Do not write parallel specs that restate them.
 
 ## Commands
 
-Use these commands when possible:
-
 ```bash
-python scripts/dev.py doctor
-python scripts/dev.py backend
-python scripts/dev.py frontend
-python scripts/dev.py test
-python scripts/dev.py eval
+python scripts/dev.py doctor          # check the local environment
+python scripts/dev.py backend         # FastAPI on :8000
+python scripts/dev.py frontend        # Vite on :5173
+python scripts/dev.py test            # fast unit/component loop
+python scripts/dev.py eval            # frozen v0.1 baseline
 python scripts/dev.py eval --suite v0.2
-python scripts/dev.py verify
+python scripts/dev.py verify          # gate before committing
+python scripts/dev.py verify --security
 ```
 
-`doctor` validates runtime prerequisites. `test` runs the fast unit/component
-loop. `eval` measures the frozen v0.1 baseline; `eval --suite v0.2` validates
-the current v0.2 contract or runs its implemented metrics. `verify` is the
-pre-commit gate. See [`README.md`](README.md) for detailed descriptions and
-[`eval/README.md`](eval/README.md) for metric definitions.
-
-## Safety Rules
-
-* Use synthetic data only.
-* Treat files under `data/fixtures/` as immutable repository fixtures.
-* Write local runtime state only under the ignored `var/` directory.
-* Never add real customer data, real PII, secrets, or API keys.
-* Do not expose write actions directly to a model or chat handler.
-* Keep ticket write providers behind application state and the confirmation
-  endpoint.
-* Ticket creation must require explicit user confirmation and repeated
-  confirmation must not create duplicate tickets.
-* If policy evidence is missing, return an insufficient-context response instead
-  of inventing an answer.
-* Order lookup must only return safe fields and must enforce the fixed demo
-  customer ownership check.
-* Policy retrieval must remain local and restricted to allowlisted Markdown.
-* An external generator may receive only a redacted policy query, allowlisted
-  evidence, and generation instructions.
-* Never send order results, customer ownership data, ticket or pending-action
-  data, admin state, conversation history, or raw logs to an external provider.
-* Citation metadata must be built by the application from retrieved evidence,
-  never accepted from model output.
-
-## Non-Negotiable Invariants
-
-These constraints must hold after every change. No exception, no workaround.
+## Non-negotiable invariants
 
 1. Repository fixtures contain synthetic data only.
 2. Policy claims require matching repository evidence.
@@ -101,77 +49,24 @@ These constraints must hold after every change. No exception, no workaround.
 9. Secrets and credentials are never committed.
 10. The chat route has no direct access to a ticket write provider.
 
-If a proposed change would violate any invariant, stop and report the conflict
-instead of proceeding.
+If a change would break one, stop and report the conflict.
 
-## Git Behavior
+Also: treat `data/fixtures/` as immutable, write runtime state only under the
+ignored `var/`, and never send order, ticket, pending-action, admin,
+conversation, or log data to an external provider.
 
-Use a review-first workflow that keeps `main` runnable and demo-ready. Follow
-`docs/dev-workflow.md` for the detailed Git workflow.
+## Git
 
-The agent may inspect the repository, create or reuse a suitable branch, make
-changes, and run checks. By default, the agent must not commit, push, or merge.
-Leave the working tree ready for review unless the user explicitly asks for Git
-write actions.
+- Work on a short-lived branch (`feat/`, `fix/`, `chore/`, `docs/`) for
+  anything beyond a typo. Never commit to `main` directly.
+- Every push runs CI. Merge to `main` with a squash once CI is green.
+- Do not commit, push, or merge unless the user asks. When asked, use explicit
+  paths (`git add -- <files>`) and Conventional Commit messages.
+- Never commit secrets, real PII, `var/`, `node_modules/`, or build output.
 
-Use a short-lived branch for non-trivial changes, especially code, tests,
-configuration, dependencies, CI, safety rules, product contract, or agent
-instruction changes. Small wording, formatting, or link-only documentation edits
-may stay on the current branch when the working tree is clean.
+## Done
 
-Before editing:
-
-* Check the current branch and working tree.
-* Reuse the current branch when it clearly matches the task.
-* Create a focused branch when working from `main`, when the task is non-trivial,
-  or when the current branch is unrelated.
-* Preserve unrelated local changes.
-
-Before returning work:
-
-* Run the relevant check for the size of the change. Use
-  `python scripts/dev.py verify` for non-trivial code, test, tooling,
-  configuration, contract, or behavior changes.
-* For trivial documentation-only edits, a short manual verification note is
-  enough.
-* Report verification failures clearly and leave the change uncommitted.
-* Provide a natural review summary and, when useful, copyable commit commands.
-
-Commit proposals should favor clarity without over-splitting. One commit is fine
-for a cohesive change. Suggest multiple commits only when that would make review
-meaningfully easier, such as separating code behavior, tests, docs, CI/tooling,
-dependencies, or mechanical formatting.
-
-Use explicit paths in commit commands and avoid `git add .` unless the full diff
-has been reviewed:
-
-```bash
-git add -- <file> <file>
-git commit -m "<type>(optional-scope): <short description>"
-```
-
-Must not:
-
-* Commit unless the user explicitly asks.
-* Push unless the user explicitly asks.
-* Merge into `main` unless the user explicitly asks.
-* Commit or push directly to `main`.
-* Commit secrets, real PII, generated build artifacts, dependency folders,
-  runtime state, or unrelated local changes.
-
-## Definition of Done
-
-A change is ready for review when:
-
-* Relevant tests pass or a manual verification note is provided.
-* `python scripts/dev.py verify` passes before merging non-trivial changes to
-  `main`.
-* No non-negotiable invariant is violated.
-* Product-contract or API shape changes update `docs/demo-scope.md` in the same
-  change.
-* New behavior stays inside the v0.2 scope unless explicitly requested.
-* No secrets, real PII, generated build artifacts, dependency folders, or
-  runtime state are committed.
-
-See [`docs/demo-scope.md`](docs/demo-scope.md) for the full milestone
-acceptance criteria and product-level definition of done.
+- `python scripts/dev.py verify` passes for code, test, config, or contract
+  changes. For a docs-only edit, a short manual check is enough.
+- No invariant is broken, and the scope document matches any contract change.
+- Report failures plainly and leave failing work uncommitted.

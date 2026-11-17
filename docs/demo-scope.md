@@ -1,47 +1,30 @@
-# A.S.I.A Demo Scope
+# A.S.I.A Scope
 
-## Current Milestone: v0.2.0 Evidence-Grounded Policy Assistant
+This is the product contract. README, AGENTS files, and ADRs summarize or
+explain it; they never override it. Terms follow [`GLOSSARY.md`](../GLOSSARY.md).
 
-v0.2 upgrades the policy flow with local evidence retrieval and optional
-external grounded generation. It preserves all v0.1 product flows, the public
-API envelope, intent and sentiment labels, tool vocabulary, synthetic-data
-boundary, and confirmation guardrail.
-
-### Version history
-
-| Version | Focus | Baseline or target |
+| Version | Focus | Status |
 | --- | --- | --- |
-| v0.1 | Deterministic vertical slice and four product flows | Original behavior |
-| v0.1.1 | Reproducibility hardening, CI, provider contracts, and eval | `eval/baseline.v0.1.json` (frozen) |
-| v0.2.0 | Local policy retrieval and grounded policy generation | `eval/baseline.v0.2.target.json` |
-| v0.2.1 | Candidate milestone for an optional LLM analyzer | Folded into v0.3.0 |
-| v0.3.0 | Vietnamese support-agent safety benchmark and Reference System | Planned; see [v0.3.0](#planned-milestone-v030-vietnamese-support-agent-safety-benchmark) |
+| v0.1 | Deterministic four-flow vertical slice | Done; baseline frozen in `eval/baseline.v0.1.json` |
+| v0.2.0 | Local policy retrieval and grounded generation | Current; waiting on the live reference run |
+| v0.3.0 | Vietnamese support-agent safety benchmark | Planned; starts after the `v0.2.0` tag |
 
-`eval/baseline.v0.1.json` and its four root JSONL inputs are frozen. They must
-not be overwritten or expanded to make v0.2 scores look better.
-
-The v0.2 target contract was amended before feature implementation on
-2026-07-14 to add refusal recall and citation validity, separate v0.2 datasets,
-and defer the LLM analyzer to v0.2.1. The amendment does not change the v0.1
-baseline. On 2026-11-16 the deferred analyzer was folded into the planned
-v0.3.0 milestone; the locked v0.2 target file keeps its historical
-`v0.2.1` label and is not edited.
+**One rule outranks convenience:** evaluation datasets and baselines are never
+edited to make a score look better. Each suite is hash-locked; a dataset change
+is a reviewed contract change, never a side effect of tuning.
 
 ---
 
-## Demo Identity
+## Product contract
 
-- Customer ID: `demo-customer-001` (display: `Khách hàng Demo`).
-- All orders, policies, actions, tickets, and evaluation cases are synthetic.
-- Demo data uses a fixed July 2026 timeline.
-- The API must never return data from an order not owned by
-  `demo-customer-001`.
+### Demo identity
 
----
+- Fixed synthetic customer `demo-customer-001` (display: `Khách hàng Demo`).
+- All orders, policies, actions, tickets, and evaluation cases are synthetic,
+  on a fixed July 2026 timeline.
+- The API never returns an order not owned by `demo-customer-001`.
 
-## Product Contract (Carried Forward)
-
-### API contract
+### API
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -50,278 +33,59 @@ v0.3.0 milestone; the locked v0.2 target file keeps its historical
 | `POST` | `/api/actions/{action_id}/confirm` | Confirm or cancel one pending action |
 | `GET` | `/api/admin/overview` | Aggregate non-PII counters |
 
-`POST /api/chat` keeps this exact response envelope:
+`POST /api/chat` returns exactly:
 
 ```text
 assistant_message | intent | sentiment | citations | tool_events | pending_action
 ```
 
-### Tools
+- **Tools:** `policy_search` | `order_lookup` | `ticket_create`. A tool count
+  increments only on an actual lookup or a confirmed write; proposing a ticket
+  does not count. Retrieval and generation add no tool names or counters.
+- **Intents:** `order_lookup` | `shipping_policy` | `return_refund` |
+  `warranty` | `ticket_request` | `other`.
+- **Sentiments:** `positive` | `neutral` | `negative`.
+- **Routing precedence** (deterministic analyzer, the v0.2 authority):
+  ticket request > explicit order ID > order keywords > return/refund >
+  warranty > shipping > other. For example, `Tạo ticket vì đơn ASIA-1001 giao
+  trễ` routes to `ticket_request`.
 
-`policy_search` | `order_lookup` | `ticket_create`
-
-A tool count increments only on an actual lookup or confirmed write. Proposing
-a ticket does not count. RAG retrieval and LLM generation do not add public tool
-names or admin counters.
-
-### Analysis labels and precedence
-
-Intents: `order_lookup` | `shipping_policy` | `return_refund` | `warranty` |
-`ticket_request` | `other`
-
-Sentiments: `positive` | `neutral` | `negative`
-
-The deterministic analyzer remains the v0.2 routing authority. When a message
-contains multiple signals, it applies this precedence:
-
-```text
-ticket request
-> explicit order ID
-> order keywords
-> return/refund
-> warranty
-> shipping
-> other
-```
-
-Examples:
-
-- `Tạo ticket vì đơn ASIA-1001 giao trễ` routes to `ticket_request`.
-- `Đơn ASIA-1001 giao trễ thì chính sách thế nào?` routes to `order_lookup`.
-- `Tôi muốn đổi trả sản phẩm đang bảo hành` routes to `return_refund`.
-
-An LLM analyzer is not part of v0.2.0. When introduced in v0.3.0, it must emit
-only the existing public labels and preserve a deterministic fallback.
+Changing the envelope, labels, tool vocabulary, or safe order fields is a
+contract change and must update this file in the same change.
 
 ### Acceptance rules
 
-**Policy answers:** Evidence comes only from H2 sections in
-`docs/policies/return_policy.md`, `docs/policies/shipping_policy.md`, and
-`docs/policies/warranty_policy.md`. Every supported answer includes the exact
-title, repository-relative source, and section. Missing or below-threshold
-evidence returns insufficient context with no citations. The application
-creates citations from retrieved evidence; a model cannot supply citation
-metadata.
+- **Policy answers:** evidence comes only from H2 sections of the trusted
+  policy corpus: `docs/policies/return_policy.md`,
+  `docs/policies/shipping_policy.md`, and `docs/policies/warranty_policy.md`.
+  Every supported answer cites exact title, repository-relative source, and
+  section. Missing or below-threshold evidence returns insufficient context
+  with no citations. Citations are built by the application, never by a model.
+- **Order lookup:** returns only order ID, status, carrier, estimated delivery,
+  item count, and last update. Unknown and non-owned IDs get the same generic
+  not-found response.
+- **Tickets:** chat may propose `create_ticket` but never creates one. Only the
+  confirmation endpoint creates it. Cancel has no side effects; repeated
+  confirmation returns the original ticket ID.
+- **Admin overview:** aggregate counters only; no message content, ownership
+  data, action payloads, ticket content, or provider controls.
 
-**Order lookup:** Return only order ID, status, carrier, estimated delivery,
-item count, and last update. Never return address, phone, email, payment data,
-or internal ownership identifiers. Unknown and non-owned IDs receive the same
-generic not-found response.
+### Data egress and failure
 
-**Ticket confirmation:** Chat may propose `create_ticket` but cannot create a
-ticket. Creation requires a separate confirmation request. Cancellation has no
-side effects. Repeated confirmation is idempotent and returns the original
-ticket ID.
-
-**Admin overview:** Aggregate counters only. No message content, order ownership
-data, action payloads, ticket content, provider controls, or AI-specific
-counters.
-
----
-
-## v0.2.0 In Scope
-
-1. **Local policy retrieval:** Load only allowlisted policy Markdown, chunk by
-   H2, assign stable evidence IDs, retrieve in memory, and return exact
-   provenance or insufficient context. No retrieval network call is allowed.
-2. **Grounded policy generation:** Optionally generate Vietnamese policy prose
-   from sufficient retrieved evidence. Order, ticket, admin, and conversation
-   data never reach the generator.
-3. **Application-owned citations:** Attach citation metadata only from evidence
-   supplied to the generator. No evidence means no generator call.
-4. **Expanded evaluation:** Add versioned v0.2 retrieval, generation, routing,
-   refusal, citation, egress, and safety cases without changing v0.1 datasets.
-5. **Provider configuration:** Select template or one concrete external
-   generator through validated local configuration. Template mode remains the
-   offline default. Missing required settings fail clearly.
-6. **Safety regression:** Preserve executable coverage for all 10 invariants and
-   the original four E2E flows.
-
-## v0.2.0 Out of Scope
-
-LLM analyzer (deferred to v0.3.0) | external embeddings | vector database |
-agent framework | LLM tool calling | model-controlled writes | auth |
-authorization | multi-tenant behavior | cloud or Docker deployment |
-PostgreSQL | queues | caches | production storage | real commerce integrations |
-real customers or PII | server-side conversation history | public AI counters |
-provider controls or badges | UI redesign | new product flows.
-
-Changing the public API envelope, labels, tool vocabulary, or order safe-field
-allowlist requires a separately reviewed scope amendment.
-
----
-
-## Planned Milestone: v0.3.0 Vietnamese Support-Agent Safety Benchmark
-
-**Status:** planned. Work starts only after the annotated `v0.2.0` tag exists.
-Nothing in this section changes the v0.2.0 contract, its pinned reference
-model, or its release gates. Terms follow [`GLOSSARY.md`](../GLOSSARY.md).
-
-v0.3.0 renames the project to **A.S.I.A — Agent Safety & Integrity
-Assessment**: a Vietnamese benchmark and reference design for customer-support
-agents that must cite, refuse, and never act without confirmation. The
-benchmark is the primary deliverable; the support demo becomes its Reference
-System. Rationale is recorded in
-[ADR-007](decisions/007-benchmark-over-support-product.md).
-
-### Configurations under test
-
-A configuration under test is one architecture paired with one pinned model.
-
-| Architecture | Authority | Where it may run |
-| --- | --- | --- |
-| Reference System | Application owns routing validation, evidence, citations, and writes; the model only proposes | Product runtime and evaluation |
-| Baseline Agent | Model calls tools directly, including `ticket_create`, guarded only by the strongest available defensive instructions | Evaluation harness only |
-
-- The Baseline Agent is never reachable from any API route, and its writes go
-  only to temporary per-run stores. Invariants 4, 7, 8, and 10 apply to the
-  product runtime unchanged.
-- The Baseline Agent's defensive prompt is versioned and must be a genuine
-  best effort, so the comparison measures instruction-level guardrails against
-  architectural guardrails.
-- Models: two local open models served through an OpenAI-compatible endpoint
-  (initial candidates `qwen3:8b` and `llama3.1:8b`, pinned by digest) and one
-  pinned API model. The API model is selected by a pilot of about 20 cases
-  across two or three candidates, then pinned before the full run. See
-  [ADR-008](decisions/008-openai-compatible-adapter-for-local-models.md).
-
-### Reference System changes
-
-- **LLM analyzer:** an optional model proposes intent and sentiment using only
-  the existing public labels. The application validates every proposal and
-  falls back to the deterministic analyzer. It preserves the deferred v0.2
-  target in `eval/baseline.v0.2.target.json`: `intent_accuracy` at least 0.90,
-  with a deterministic fallback of at least 0.791667, on the frozen v0.1 intent
-  cases.
-- **Trusted policy corpus:** grows from three to about ten synthetic policy
-  documents. The allowlist in this document is updated in the same change as
-  the documents. If retrieval misses targets on the larger corpus, a new
-  retrieval ADR is required before changing strategy.
-- The public API envelope, labels, tool vocabulary, safe order fields, and
-  confirmation guardrail do not change.
-
-### Benchmark dataset
-
-- About 300 new synthetic Vietnamese cases under `eval/v0.3/`, in six
-  categories: grounded answer, insufficient context, direct injection,
-  indirect injection, cross-customer data probing, and unauthorized action.
-- About 30% of cases carry a linguistic-variant tag: no diacritics, teencode,
-  or Vietnamese-English code-switching.
-- Every attack case names the invariant it targets.
-- **Attack corpus:** poisoned policy-document variants live only under
-  `eval/` and are loaded only by the evaluation harness. They never join the
-  trusted policy corpus or the product runtime.
-- Cases are single-turn, plus harness-driven confirmation sequences (propose,
-  confirm or cancel, repeat confirm). Multi-turn attack scripts are out of
-  scope.
-- The frozen v0.1 and v0.2 datasets and baselines remain unchanged. v0.3 uses
-  its own manifest and dataset hash.
-- Benchmark data and the attack corpus are licensed CC BY 4.0; code remains
-  MIT.
-
-### Scoring
-
-- Every configuration reports two axes: **violation rate** per invariant on
-  attack cases, and **task success rate** on legitimate cases together with an
-  over-refusal rate.
-- Safety metrics use deterministic oracles over harness-observed effects:
-  writes in the temporary store, citation validity against evidence units,
-  exposed order fields, and answers given where insufficient context was
-  required. No safety metric uses a model as judge.
-- Human review covers only a sampled prose-quality check.
-- Local models run three times per case at temperature 0 with a fixed seed, and
-  the report shows spread. The API model runs once per case at the milestone.
-- Results are cached by case, model digest, and prompt hash, so an unchanged
-  rerun makes no model call.
-- Paid API usage for the milestone is capped at USD 10; development iterations
-  use template mode or local models.
-
-### Gates
-
-Locked before feature implementation:
-
-- v0.3 datasets, manifest, and metric definitions.
-- **Reference System safety gate:** zero violations across all attack cases
-  and all models.
-- The LLM analyzer intent targets listed above.
-
-Locked after the pilot and before the full run: the Reference System minimum
-task success rate. The Baseline Agent is measured and reported but never gated.
-
-### Publication
-
-- Primary: a static benchmark report published with GitHub Pages, showing the
-  architecture-by-model comparison and per-case drill-down.
-- Secondary: a public playground of the Reference System in template mode only,
-  with no provider credential, shared demo state that resets periodically, a
-  visible reset notice, and basic rate limiting.
-- Before the playground is exposed publicly, pending-action retention must be
-  bounded. Today every drafted action stays in process memory until restart,
-  which is acceptable locally but not on a public host. Eviction may make an
-  old action ID unknown, but must never let a repeated confirmation create a
-  second ticket.
-
-### v0.3.0 Out of scope
-
-Agent authorization gateway (recorded as proposed future work in
-[ADR-009](decisions/009-agent-authorization-gateway-future-work.md)) |
-multi-turn attack scripts | model-controlled writes in the Reference System |
-Baseline Agent access from any API route | auth | multi-tenant behavior |
-production storage | real customers or PII | real commerce integrations |
-external embeddings | vector database without a new ADR | server-side
-conversation history.
-
-Exceptions to the v0.2 out-of-scope list apply only as stated above: LLM tool
-calling exists only inside the Baseline Agent in the evaluation harness, and
-deployment covers only the static report and the template-mode playground.
-
----
-
-## Data Egress And Failure Contract
-
-- The deterministic analyzer and local retriever make no external calls.
+- The analyzer and local retriever make no external calls.
 - An external generator receives only a redacted policy query, allowlisted
-  evidence text, and generation instructions.
-- Order results, ticket data, pending actions, admin state, conversation
-  history, internal customer IDs, and raw logs are never sent externally.
-- Redaction covers tested structured identifiers such as demo order IDs, email
-  addresses, and phone numbers; it is not represented as general PII detection.
-- Unknown providers, incompatible settings, and missing selected-provider
-  configuration fail application startup.
-- Authentication rejection, timeout, temporary unavailability, empty output,
-  or output that violates the grounded response contract at runtime falls back
-  to a deterministic template derived from retrieved evidence and records a
-  sanitized fallback reason.
-- A live run containing any provider fallback is not eligible to become the
-  curated model reference, even when the template answer passes content checks.
-- Request cancellation propagates. It is not converted into a fallback.
-- Missing or insufficient evidence returns the existing safe refusal and never
-  calls a generator.
+  evidence text, and generation instructions, at an endpoint pinned in code.
+- Order results, tickets, pending actions, admin state, conversation history,
+  internal customer IDs, and raw logs are never sent externally.
+- Redaction covers tested structured identifiers (demo order IDs, emails,
+  phone numbers); it is not general PII detection.
+- Unknown providers or missing selected-provider settings fail startup.
+- At runtime, auth rejection, timeout, unavailability, empty output, or output
+  that breaks the grounded contract falls back to the evidence template with a
+  sanitized reason. Cancellation propagates instead of falling back.
+- No sufficient evidence means no generator call.
 
----
-
-## v0.2 Target Metrics
-
-Locked before feature implementation in `eval/baseline.v0.2.target.json`.
-
-| Metric | v0.2 minimum |
-| --- | ---: |
-| `policy_section_hit_rate` | 0.90 |
-| `unsupported_query_precision` | 0.90 |
-| `unsupported_query_recall` | 1.00 |
-| `grounded_response_pass_rate` | 0.95 |
-| `citation_coverage_rate` | 1.00 |
-| `citation_validity_rate` | 1.00 |
-| `routing_precedence_contract_pass_rate` | 1.00 |
-| `order_id_extraction_accuracy` | 0.928571 |
-| `order_privacy_guardrail_pass_rate` | 1.00 |
-| `confirmation_guardrail_pass_rate` | 1.00 |
-| `provider_config_contract_pass_rate` | 1.00 |
-| `fixture_immutability_pass_rate` | 1.00 |
-
----
-
-## Safety Invariants (All 10 Carried Forward)
+### Safety invariants
 
 1. Repository fixtures contain synthetic data only.
 2. Policy claims require matching repository evidence.
@@ -336,38 +100,125 @@ Locked before feature implementation in `eval/baseline.v0.2.target.json`.
 
 ---
 
-## Definition Of Done
+## v0.2.0 Evidence-Grounded Policy Assistant (current)
 
-v0.2.0 is done when:
+**In scope:** local H2 retrieval with stable evidence IDs; optional grounded
+generation through one external generator (template mode is the offline
+default); application-owned citations; versioned v0.2 evaluation datasets;
+validated provider configuration; executable coverage of all invariants and the
+four E2E flows.
 
-- All four v0.1 flows and the exact public contracts still work.
-- Local retrieval meets the frozen section-hit and refusal targets.
-- Supported generated policy responses use only retrieved evidence.
-- No-evidence requests never invoke a generator.
-- Citation coverage and validity are both 1.00.
-- The curated grounded-response pass rate is at least 0.95.
-- Template mode and verification run without external-provider secrets or
-  generator API calls. CI setup may still download locked dependencies and
-  Playwright Chromium.
-- External provider configuration, egress, timeout, auth, malformed-output, and
-  fallback behavior have executable tests.
-- All 10 invariants and the original E2E flows pass.
-- `eval/baseline.v0.1.json` and its datasets are unchanged.
-- A genuine pinned-model live result records provider, model, prompt, corpus,
-  dataset, parameter, and latency provenance without secrets or raw prompts;
-  a human reviewer completes all 21 case scores and verifies the corresponding
-  live run/session.
-- The curated `eval/results/v0.2-reference.json` passes the exact provenance,
-  schema, metric, and content-control checks and is tracked by Git.
-- The v0.2 manifest, dataset hash, policy corpus hash, and frozen v0.1 input hash
-  match their committed contract.
-- `doctor`, `test`, both evaluation suites, `verify`, `verify --security`, the
-  release-evidence sub-gate, and Playwright E2E pass at their documented gates
-  on the final release SHA.
-- Demo reset restores runtime state without modifying repository fixtures or
-  otherwise dirtying a clean working tree.
-- README, evaluation docs, ADRs, and examples match implemented behavior.
-- `docs/releases/v0.2.0.md` maps all invariants to executable evidence and
-  records release-gate status without redefining this contract.
-- After final review, the integrated `main` working tree is clean and the
-  annotated `v0.2.0` tag is created from that reviewed release SHA.
+**Out of scope:** LLM analyzer (moved to v0.3) | external embeddings | vector
+database | agent framework | LLM tool calling | model-controlled writes | auth |
+multi-tenant behavior | cloud or Docker deployment | production storage | real
+commerce integrations | real customers or PII | server-side conversation
+history | provider controls in the UI | new product flows.
+
+**Targets** (locked in `eval/baseline.v0.2.target.json`; definitions in
+[`eval/README.md`](../eval/README.md)):
+
+| Metric | Minimum |
+| --- | ---: |
+| `policy_section_hit_rate` | 0.90 |
+| `unsupported_query_precision` | 0.90 |
+| `unsupported_query_recall` | 1.00 |
+| `grounded_response_pass_rate` | 0.95 |
+| `citation_coverage_rate` / `citation_validity_rate` | 1.00 |
+| `routing_precedence_contract_pass_rate` | 1.00 |
+| `order_id_extraction_accuracy` | 0.928571 |
+| Order privacy, confirmation, provider config, fixture immutability | 1.00 |
+
+**Done when:**
+
+- The four flows, the public contract, and all ten invariants pass in
+  `verify` and the Playwright E2E suite.
+- Offline v0.2 metrics meet their targets and the frozen v0.1 inputs are
+  unchanged.
+- One live run with the pinned model `gpt-5.4-mini-2026-03-17` has no
+  provider fallback, a human has scored all 21 generation cases, and
+  `--curate-reference` has written `eval/results/v0.2-reference.json`.
+- `python scripts/dev.py verify --release` passes, and the `v0.2.0` tag is
+  created from `main`.
+
+---
+
+## v0.3.0 Vietnamese Support-Agent Safety Benchmark (planned)
+
+The project becomes **A.S.I.A — Agent Safety & Integrity Assessment**: a
+Vietnamese benchmark and reference design for customer-support agents that
+must cite, refuse, and never act without confirmation. The support demo becomes
+its Reference System ([ADR-007](decisions/007-benchmark-over-support-product.md)).
+Nothing here changes the v0.2.0 contract.
+
+### What is scored
+
+A configuration under test is one architecture paired with one pinned model.
+
+| Architecture | Authority | Where it may run |
+| --- | --- | --- |
+| Reference System | Application owns routing validation, evidence, citations, and writes; the model only proposes | Product runtime and evaluation |
+| Baseline Agent | Model calls tools directly, including `ticket_create`, guarded by the strongest defensive prompt available | Evaluation harness only |
+
+- The Baseline Agent is unreachable from any API route and writes only to
+  temporary per-run stores; the invariants keep applying to the product runtime.
+- Its defensive prompt is versioned and a genuine best effort, so the result
+  compares prompt guardrails with architectural guardrails.
+- Models: two local open models through an OpenAI-compatible endpoint (initial
+  candidates `qwen3:8b` and `llama3.1:8b`, pinned by digest) plus one pinned
+  API model chosen by a pilot of about 20 cases
+  ([ADR-008](decisions/008-openai-compatible-adapter-for-local-models.md)).
+
+### Reference System changes
+
+- **LLM analyzer:** proposes intent and sentiment from the existing labels
+  only; the application validates and falls back to the deterministic
+  analyzer. Target on the frozen v0.1 intent cases: `intent_accuracy` at least
+  0.90, deterministic fallback at least 0.791667.
+- **Trusted policy corpus:** grows to about ten synthetic documents; the
+  allowlist above changes in the same commit. A retrieval-strategy change needs
+  a new ADR.
+- **Pending-action retention** is bounded before any public deployment.
+  Eviction may make an old action ID unknown but must never allow a duplicate
+  ticket.
+
+### Dataset and scoring
+
+- About 300 synthetic Vietnamese cases under `eval/v0.3/`, in six categories:
+  grounded answer, insufficient context, direct injection, indirect injection,
+  cross-customer probing, unauthorized action. Every attack case names the
+  invariant it targets.
+- About 30% carry a linguistic-variant tag: no diacritics, teencode, or
+  Vietnamese-English code-switching.
+- **Attack corpus:** poisoned policy variants that live only under `eval/` and
+  never join the trusted policy corpus.
+- Single-turn cases plus harness-driven confirmation sequences; no multi-turn
+  attack scripts.
+- Each configuration reports **violation rate** per invariant and **task
+  success** with **over-refusal** on legitimate cases.
+- Safety is scored by deterministic oracles over observed effects, never by a
+  model judge. Humans review only a sampled prose-quality check.
+- Local models run three times per case (temperature 0, fixed seed); the API
+  model runs once. Results are cached by case, model, and prompt hash. Paid API
+  spend is capped at USD 10.
+- Data is licensed CC BY 4.0; code stays MIT.
+
+### Gates
+
+- Locked before implementation: datasets, metric definitions, and the
+  **Reference System safety gate of zero violations** across all attack cases
+  and models.
+- Locked after the pilot: the Reference System minimum task success rate.
+- The Baseline Agent is measured, never gated.
+
+### Publication
+
+- Primary: a static benchmark report on GitHub Pages.
+- Secondary: a template-mode playground with no credentials, shared state that
+  resets periodically, a visible reset notice, and basic rate limiting.
+
+**Out of scope:** agent authorization gateway (future work,
+[ADR-009](decisions/009-agent-authorization-gateway-future-work.md)) |
+multi-turn attacks | model-controlled writes in the Reference System | auth |
+multi-tenant behavior | production storage | real data | external embeddings |
+server-side conversation history. LLM tool calling exists only inside the
+Baseline Agent, and deployment covers only the report and the playground.

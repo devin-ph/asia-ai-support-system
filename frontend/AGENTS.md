@@ -1,131 +1,35 @@
 # Frontend Instructions
 
-These instructions apply to all files under `frontend/`.
+Applies to `frontend/`. A minimal React and TypeScript UI for the four demo
+flows, talking only to the local backend. The v0.3 benchmark report is a
+separate static page; it does not grow this UI.
 
-## Purpose
+## Map
 
-The frontend remains a minimal React and TypeScript interface for the
-`v0.2.0: Evidence-Grounded Policy Assistant` milestone. It renders the four
-existing demo flows (policy chat, order lookup, ticket confirmation, admin
-overview) and connects exclusively to the local backend API.
+- `src/App.tsx`: layout and cross-panel state.
+- `src/api.ts`: typed fetch wrappers. Types mirror `backend/app/schemas.py`
+  exactly, with no frontend-only fields.
+- `src/components/`: `ChatPanel`, `ConfirmCard`, `CitationPanel`, and
+  `AdminOverview`.
+- `src/styles.css`: vanilla CSS only.
 
-Read `../docs/demo-scope.md` before changing behavior. The planned v0.3.0
-benchmark is published as a separate static report; it does not expand this
-demo UI.
+## Confirmation flow (safety-critical)
 
-v0.2 does not add provider controls, provider badges, AI counters, or a UI
-redesign. Frontend changes are limited to preserving compatibility and showing
-the existing answer and citation contract correctly when policy prose becomes
-generated.
+- Show `ConfirmCard` only when the backend returns a `pending_action`.
+- Call the confirm endpoint only for an `action_id` the backend issued as
+  `pending`.
+- Offer both confirm and cancel, disable them while a request is in flight, and
+  never auto-confirm. After resolution, show the result without the buttons.
 
-## Architecture
+## Rules
 
-- `src/main.tsx`: React root mount.
-- `src/App.tsx`: shell layout and cross-panel state (admin refresh token).
-- `src/api.ts`: typed fetch wrappers and API response interfaces.
-- `src/styles.css`: global stylesheet; vanilla CSS only.
-- `src/components/ChatPanel.tsx`: message form, conversation turns, tool
-  events, and inline citations.
-- `src/components/ConfirmCard.tsx`: pending-action confirmation and
-  cancellation UI.
-- `src/components/CitationPanel.tsx`: citation display for policy answers.
-- `src/components/AdminOverview.tsx`: aggregate counter panel.
-
-Keep components focused. If a new component exceeds roughly 200 lines,
-consider splitting it.
-
-## Confirmation Flow
-
-The confirmation guardrail is the most safety-critical frontend contract:
-
-- `ConfirmCard` must only appear when the backend returns a `pending_action`.
-- The UI must never call `POST /api/actions/{action_id}/confirm` unless the
-  backend previously issued that `action_id` with status `pending`.
-- Buttons must be disabled while a request is in-flight (`isSubmitting`).
-- Both **confirm** and **cancel** paths must be available to the user.
-- After resolution, the card shows the result and does not offer the buttons
-  again.
-
-Do not bypass, auto-confirm, or remove the explicit user confirmation step.
-
-## API Types
-
-All request and response types live in `src/api.ts`. These types must match
-the backend Pydantic schemas in `backend/app/schemas.py`:
-
-- `ChatResponse` mirrors the chat envelope.
-- `ActionConfirmResponse` mirrors the confirmation response.
-- `AdminOverviewData` mirrors the admin overview.
-
-When the backend adds or renames a field, update `api.ts` to match. Do not
-add frontend-only fields to API types.
-
-## Dependencies
-
-- React and ReactDOM are the only runtime dependencies.
-- Frontend unit/component test tooling uses Vitest, React Testing Library,
-  jsdom, and MSW. Browser E2E coverage uses Playwright.
-- Node.js 26 LTS is the repository default selected by `../.nvmrc`.
-- Node.js must satisfy `^22.22.2 || ^24.15.0 || ^26.0.0`, the intersection of
-  supported LTS lines and the toolchain's engine ranges (jsdom sets the
-  minor floors). Odd and future major versions are intentionally unsupported
-  until they are reviewed and added explicitly in `package.json`,
-  `scripts/dev.py`, and CI together.
-- Current toolchain majors: React 19, TypeScript 7, Vite 8, Vitest 5, MSW 3,
-  jsdom 31, and Playwright 1.65 (pinned exactly).
-- Install the locked dependency graph with `npm ci`.
-- Do not add Redux, Zustand, TanStack Query, Tailwind, or any UI component
-  library in this milestone.
-- Add a dependency only when the standard React API and vanilla CSS are
-  genuinely insufficient for the task.
-
-## Commands
-
-```bash
-npm run dev
-npm run e2e
-npm run test
-npm run test:watch
-npm run typecheck
-npm run build
-```
-
-Tests should exercise visible behavior and HTTP boundaries rather than
-component implementation details or broad snapshots. Run `npm run test` and
-`npm run typecheck` before committing frontend changes. Before committing or
-opening a pull request, run the repository-level verification from the project
-root:
-
-```bash
-python scripts/dev.py verify
-```
-
-## UI States
-
-Every async interaction must handle three states:
-
-- **Loading / sending**: show a visible indicator and disable the trigger.
-- **Error**: display the error message to the user.
-- **Disabled**: buttons are disabled when input is empty or a request is
-  in-flight.
-
-Do not remove existing loading, error, or disabled handling without a
-replacement.
-
-## Accessibility Baseline
-
-- Interactive elements use semantic HTML (`<button>`, `<form>`, `<label>`).
-- `aria-live="polite"` on the conversation container.
-- `aria-label` on landmark sections (e.g. the confirm card).
-- Buttons have visible text; icon-only buttons need `aria-label`.
-- Form inputs have associated `<label>` elements.
-
-Preserve these attributes when editing components.
-
-## Style
-
-- Vanilla CSS in `src/styles.css`. No CSS-in-JS, no utility frameworks.
-- Keep user-facing Vietnamese natural and correctly accented.
-- Keep code identifiers and comments in English.
-- Prefer named exports for components.
-- Avoid `any`; use the types from `api.ts`.
+- Every async interaction shows loading, error, and disabled states.
+- Keep semantic HTML, labelled inputs, `aria-live="polite"` on the
+  conversation, and an `aria-label` on landmark sections.
+- React and ReactDOM are the only runtime dependencies. Do not add state,
+  styling, or UI-kit libraries.
+- Node `^22.22.2 || ^24.15.0 || ^26.0.0`, default 26 via `../.nvmrc`. Change
+  the range in `package.json`, `scripts/dev.py`, and CI together. Install with
+  `npm ci`.
+- Test visible behavior and HTTP boundaries with Vitest, Testing Library, and
+  MSW. Browser flows run in Playwright (`npm run e2e`).

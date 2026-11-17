@@ -22,10 +22,10 @@ python scripts/dev.py eval --suite v0.2 --live
 # After human scoring, validate and promote one ignored live result.
 python scripts/dev.py eval --suite v0.2 --curate-reference var/eval/live-result-....json
 
-# Require the Git-tracked, current, human-reviewed reference.
+# Require a current, human-reviewed reference.
 python scripts/dev.py eval --suite v0.2 --require-reference
 
-# Release-evidence sub-gate (security, tracked reference, main, and clean tree).
+# Release gate: verify, security audits, and the curated reference.
 python scripts/dev.py verify --release
 
 # Machine-readable reports.
@@ -40,11 +40,10 @@ calls a network. `--live` is the only evaluation path that invokes the selected
 external generator and writes an ignored review artifact. The default eval
 command checks the exact v0.1 snapshot. Regular `python scripts/dev.py verify`
 checks both that snapshot and the v0.2 offline gate without claiming release
-readiness. `verify --release` is a release-evidence sub-gate that requires the
-curated human review to be current, Git-tracked, and checked from a clean
-`main`; it fails while any condition is missing. `doctor` and browser E2E remain
-separate final-sequence commands. Use `--live` only for the explicit external
-reference run.
+readiness. `verify --release` adds the security audits and requires a valid,
+current, human-reviewed reference; it fails until that exists. Use `--live`
+only for the explicit external reference run. The release steps are listed in
+[`docs/development.md`](../docs/development.md#releasing-v020).
 
 ## Frozen v0.1 baseline
 
@@ -284,10 +283,8 @@ under `var/eval/`, validates provider/model/prompt and current corpus/dataset
 hashes, rejects fallback or incomplete runs, recomputes the final score, and
 writes `eval/results/v0.2-reference.json` without local `answer_text`. The
 regular v0.2 evaluator schema-validates a reference found at that fixed path.
-It counts as committed release evidence only when the required-reference gate
-also confirms that Git tracks it. As a release-process requirement, do not run
-curation or retain that fixed-path artifact before a genuine external run and
-complete human review exist.
+Do not run curation before a genuine external run and complete human review
+exist.
 
 The committed v0.2 reference uses one exact schema. Validation rejects missing
 or extra top-level and provenance fields, altered `store=False`, zero-retry or
@@ -305,10 +302,8 @@ Local live experiments may use another configured model and still produce a
 review artifact. Curation is stricter: it accepts only the ADR-pinned
 `gpt-5.4-mini-2026-03-17` model, so an override can be compared locally but
 cannot become the v0.2 release reference. At present the reference and human
-review are still pending; `--require-reference` and `verify --release`
-therefore fail by design rather than treating offline metrics as final. The
-required-reference path also rejects a valid local artifact until
-`eval/results/v0.2-reference.json` is reviewed and tracked by Git.
+review are still pending, so `--require-reference` and `verify --release` fail
+by design rather than treating offline metrics as final.
 
 ## Change control
 
