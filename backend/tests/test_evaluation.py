@@ -485,3 +485,20 @@ def test_live_run_requires_explicit_external_provider(
         match="ASIA_RESPONSE_GENERATOR=openai",
     ):
         EVALUATION.run_v02_live_generation()
+
+
+def test_v02_retrievers_read_only_hash_locked_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real_loader = EVALUATION.load_policy_corpus
+    requested: list[tuple[str, ...]] = []
+
+    def spy(**kwargs: object) -> object:
+        requested.append(tuple(kwargs["allowed_sources"]))
+        return real_loader(**kwargs)
+
+    monkeypatch.setattr(EVALUATION, "load_policy_corpus", spy)
+    retriever = EVALUATION._v02_retriever()
+
+    assert requested == [EVALUATION.V02_POLICY_SOURCES]
+    assert {item.source for item in retriever.evidence} == set(EVALUATION.V02_POLICY_SOURCES)

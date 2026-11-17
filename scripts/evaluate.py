@@ -108,6 +108,7 @@ from app.policy_retrieval import (  # noqa: E402
     MIN_RETRIEVAL_SCORE,
     NGRAM_WEIGHT,
     LocalPolicyRetriever,
+    load_policy_corpus,
 )
 from app.policy_search import search_policy  # noqa: E402
 from app.providers import (  # noqa: E402
@@ -533,11 +534,16 @@ def evaluate_v02_routing(cases: tuple[dict[str, Any], ...]) -> MetricResult:
     return MetricResult(len(cases) - len(failures), len(cases), tuple(failures))
 
 
+def _v02_retriever() -> LocalPolicyRetriever:
+    """Retrieve only from the hash-locked v0.2 sources, whatever the runtime allowlist."""
+    return LocalPolicyRetriever(load_policy_corpus(allowed_sources=V02_POLICY_SOURCES))
+
+
 def evaluate_v02_retrieval(
     cases: tuple[dict[str, Any], ...],
 ) -> dict[str, MetricResult]:
     """Measure the local retriever against the frozen supported/refusal set."""
-    retriever = LocalPolicyRetriever()
+    retriever = _v02_retriever()
     section_failures: list[str] = []
     top_one_failures: list[str] = []
     false_refusals: list[str] = []
@@ -628,10 +634,11 @@ async def _evaluate_v02_generation(
     include_answer_text: bool = False,
 ) -> tuple[dict[str, MetricResult], tuple[dict[str, Any], ...]]:
     """Evaluate grounded answer text and application-owned citation provenance."""
+    retriever = _v02_retriever()
     policy = provider or GroundedPolicyProvider(
-        GroundedResponseRuntime(TemplateResponseGenerator())
+        GroundedResponseRuntime(TemplateResponseGenerator()),
+        retriever=retriever,
     )
-    retriever = LocalPolicyRetriever()
     grounded_failures: list[str] = []
     coverage_failures: list[str] = []
     validity_failures: list[str] = []
@@ -896,7 +903,7 @@ def run_v02_live_generation() -> tuple[dict[str, Any], Path]:
         )
 
     runtime = build_response_runtime(settings)
-    provider = GroundedPolicyProvider(runtime)
+    provider = GroundedPolicyProvider(runtime, retriever=_v02_retriever())
     started = time.perf_counter()
     metrics, outcomes = asyncio.run(
         _evaluate_v02_generation(
