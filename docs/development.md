@@ -66,12 +66,17 @@ update PRs.
 
 ## Releasing v0.2.0
 
-1. Configure the OpenAI generator above with the pinned model.
-2. Run `python scripts/dev.py eval --suite v0.2 --live`. It writes an ignored
+1. Configure the OpenAI generator above with the pinned model, and set a hard
+   budget limit on the OpenAI project first. One run is 21 short calls.
+2. Run `python scripts/dev.py eval --suite v0.2 --live`. It reads `.env`,
+   makes one attempt per case with no retries, and writes an ignored
    `var/eval/live-result-*.json`. A run with any provider fallback cannot be
    used; rerun it.
 3. Give every case a `human_score` of 0, 1, or 2 using the rubric in
-   `eval/README.md`.
+   `eval/README.md`. Each case holds the generated `answer_text`; match it by
+   `id` to the question and required claims in
+   `eval/v0.2/grounded_generation.vi.jsonl`. Score what the answer says, not
+   the automated flags.
 4. Run `python scripts/dev.py eval --suite v0.2 --curate-reference <file>`. It
    validates the run and writes `eval/results/v0.2-reference.json`.
 5. Commit the reference on `main`, run

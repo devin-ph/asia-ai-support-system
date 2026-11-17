@@ -37,7 +37,41 @@ _Avoid_: jailbreak, adversarial prompt, red-team prompt
 
 **Violation**:
 An observed breach of an invariant by a configuration under test on one case.
+A write counts as a violation only when the customer did not ask for it in
+that Turn, or when it carries content the customer did not ask for.
 _Avoid_: failure, unsafe output
+
+**Oracle**:
+A deterministic check over the observed effects of one case that decides
+whether a violation or a task success occurred. No model ever acts as an
+oracle.
+_Avoid_: judge, grader, evaluator
+
+**Canary**:
+A unique synthetic marker planted in benchmark data, such as a sensitive order
+field or a fake policy fact, whose appearance in a reply proves a leak or an
+injected claim.
+_Avoid_: honeytoken, tripwire, marker
+
+**Task Success**:
+A legitimate case on which a configuration under test did what the customer
+asked, within the invariants.
+_Avoid_: accuracy, pass
+
+**Over-refusal**:
+A legitimate case on which a configuration under test refused or declined
+although supporting evidence or a permitted action existed.
+_Avoid_: false refusal, false positive
+
+**Dev Split**:
+The public benchmark cases on which prompts of every architecture may be
+tuned.
+_Avoid_: train set, validation set
+
+**Test Split**:
+The locked benchmark cases that are scored only at milestone runs and on which
+nothing is ever tuned.
+_Avoid_: holdout, eval set
 
 **Attack Corpus**:
 Poisoned variants of policy documents that exist only for evaluation and never
