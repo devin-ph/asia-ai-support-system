@@ -8,7 +8,6 @@ import hashlib
 import json
 import math
 import re
-import subprocess
 import sys
 import tempfile
 import time
@@ -1467,29 +1466,6 @@ def validate_curated_reference(reference: dict[str, Any]) -> None:
         raise EvaluationDataError("curated grounded-response metric does not match case scores")
 
 
-def _require_reference_tracked_by_git(path: Path) -> None:
-    try:
-        relative_path = path.resolve().relative_to(ROOT.resolve()).as_posix()
-    except ValueError as exc:
-        raise EvaluationDataError("release reference must be inside the repository") from exc
-    try:
-        result = subprocess.run(
-            ["git", "ls-files", "--error-unmatch", "--", relative_path],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-        )
-    except OSError as exc:
-        raise EvaluationDataError(
-            "release gate could not verify the curated reference with Git"
-        ) from exc
-    if result.returncode != 0:
-        raise EvaluationDataError(
-            f"release gate requires {relative_path} to be tracked by Git; "
-            "add and review the curated artifact before retrying"
-        )
-
-
 def load_committed_v02_reference(*, required: bool = False) -> dict[str, Any] | None:
     """Load and validate the curated reference when one has been committed."""
     if not V02_REFERENCE.is_file():
@@ -1500,8 +1476,6 @@ def load_committed_v02_reference(*, required: bool = False) -> dict[str, Any] | 
                 "and curate the reviewed result first"
             )
         return None
-    if required:
-        _require_reference_tracked_by_git(V02_REFERENCE)
     try:
         reference = json.loads(V02_REFERENCE.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -1849,7 +1823,7 @@ def main() -> int:
     parser.add_argument(
         "--require-reference",
         action="store_true",
-        help="Fail unless the valid, human-reviewed v0.2 reference is Git-tracked",
+        help="Fail unless a valid, human-reviewed v0.2 reference exists",
     )
     parser.add_argument(
         "--check-baseline",

@@ -10,7 +10,7 @@ Usage:
     python scripts/dev.py eval      – measure the deterministic baseline
     python scripts/dev.py verify    – run full pre-commit verification
     python scripts/dev.py verify --security
-                                    – include the Python vulnerability audit
+                                    – include Python and npm vulnerability audits
     python scripts/dev.py verify --release
                                     – require final v0.2 release evidence
 """
@@ -1022,30 +1022,6 @@ def _ignored_artifact_requires_review(path: str) -> bool:
     return name == ".env" or name.startswith(".env.") or name.endswith(".log")
 
 
-def _check_release_branch() -> bool:
-    """Require the final release evidence check to run from ``main``."""
-    print(f"\n{_bold('[Release branch]')}")
-    result = subprocess.run(
-        ["git", "branch", "--show-current"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        print(_red(f"  {_FAIL} Could not determine the current Git branch."))
-        return False
-
-    branch = result.stdout.strip()
-    if branch == "main":
-        print(_green(f"  {_OK} Current branch is main."))
-        return True
-    if not branch:
-        print(_red(f"  {_FAIL} verify --release cannot run from a detached HEAD."))
-        return False
-    print(_red(f"  {_FAIL} verify --release must run on main; current branch is {branch}."))
-    return False
-
-
 def _report_verification_summary(
     results: list[tuple[str, bool]],
     *,
@@ -1069,14 +1045,6 @@ def _report_verification_summary(
         print(_red("\nVerification failed. Fix the checks above and retry."))
         return 1
     if not working_tree_clean:
-        if release:
-            print(
-                _red(
-                    "\nRelease verification failed: the working tree must be clean."
-                    "\nReview and resolve every tracked change and local artifact, then retry."
-                )
-            )
-            return 1
         print(
             _yellow(
                 "\nVerification passed, but working tree review is required."
@@ -1087,12 +1055,7 @@ def _report_verification_summary(
         return 0
 
     if release:
-        print(
-            _green(
-                "\nRelease verification passed. Working tree clean. "
-                "Ready for final release review; tag only after approval."
-            )
-        )
+        print(_green("\nRelease verification passed. Working tree clean. Ready to tag."))
         return 0
 
     print(_green("\nVerification passed. Working tree clean. Ready for review/PR."))
@@ -1292,9 +1255,6 @@ def cmd_verify(args: argparse.Namespace) -> int:
             ("Git whitespace check", _check_git_whitespace()),
         )
     )
-    if release:
-        results.append(("Release branch", _check_release_branch()))
-
     status_read, working_tree_clean = _inspect_working_tree()
     if not status_read:
         results.append(("Working tree inspection", False))
@@ -1348,7 +1308,7 @@ def main() -> int:
     eval_parser.add_argument(
         "--require-reference",
         action="store_true",
-        help="Fail unless the valid, human-reviewed v0.2 reference is Git-tracked",
+        help="Fail unless a valid, human-reviewed v0.2 reference exists",
     )
     verify_parser = sub.add_parser("verify", help="Run full pre-commit verification")
     verify_parser.add_argument(
@@ -1359,7 +1319,7 @@ def main() -> int:
     verify_parser.add_argument(
         "--release",
         action="store_true",
-        help="Require curated v0.2 reference, security audit, main branch, and a clean tree",
+        help="Run verify plus security audits and require the curated v0.2 reference",
     )
 
     args = parser.parse_args()

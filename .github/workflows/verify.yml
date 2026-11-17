@@ -1,11 +1,12 @@
 name: Verify
 
 on:
-  pull_request:
+  # Every pushed branch runs CI, so solo work needs no pull request to get a result.
   push:
-    branches:
-      - main
   workflow_dispatch:
+  # A weekly run catches newly published vulnerabilities while the repo is idle.
+  schedule:
+    - cron: "0 2 * * 1"
 
 permissions:
   contents: read

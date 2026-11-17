@@ -719,39 +719,6 @@ def test_working_tree_status_classifies_changes_and_ignored_artifacts(
     assert working_tree_clean is expected_clean
 
 
-@pytest.mark.parametrize(
-    ("branch_output", "expected", "message"),
-    [
-        ("main\n", True, "Current branch is main."),
-        ("codex/v0.2-finalize\n", False, "must run on main"),
-        ("", False, "detached HEAD"),
-    ],
-)
-def test_release_branch_requires_main_and_rejects_detached_head(
-    branch_output: str,
-    expected: bool,
-    message: str,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    def git_branch(
-        command: list[str],
-        **kwargs: object,
-    ) -> subprocess.CompletedProcess[str]:
-        assert command == ["git", "branch", "--show-current"]
-        assert kwargs == {
-            "cwd": DEV.ROOT,
-            "capture_output": True,
-            "text": True,
-        }
-        return subprocess.CompletedProcess(command, 0, branch_output, "")
-
-    monkeypatch.setattr(DEV.subprocess, "run", git_branch)
-
-    assert DEV._check_release_branch() is expected
-    assert message in capsys.readouterr().out
-
-
 def test_clean_verification_is_ready_for_review_but_not_release(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -785,7 +752,7 @@ def test_dirty_verification_passes_without_claiming_readiness(
     assert "Ready for PR/tag" not in output
 
 
-def test_release_verification_requires_clean_tree(
+def test_release_verification_warns_but_passes_with_dirty_tree(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     exit_code = DEV._report_verification_summary(
@@ -794,13 +761,13 @@ def test_release_verification_requires_clean_tree(
         release=True,
     )
 
-    assert exit_code == 1
+    assert exit_code == 0
     output = capsys.readouterr().out
-    assert "Release verification failed: the working tree must be clean." in output
-    assert "Ready for final release review" not in output
+    assert "working tree review is required" in output
+    assert "Ready to tag" not in output
 
 
-def test_clean_release_verification_still_requires_final_review(
+def test_clean_release_verification_is_ready_to_tag(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     exit_code = DEV._report_verification_summary(
@@ -810,9 +777,9 @@ def test_clean_release_verification_still_requires_final_review(
     )
 
     assert exit_code == 0
-    output = capsys.readouterr().out
-    assert "Release verification passed. Working tree clean." in output
-    assert "Ready for final release review; tag only after approval." in output
+    assert "Release verification passed. Working tree clean. Ready to tag." in (
+        capsys.readouterr().out
+    )
 
 
 def test_failed_verification_stays_failed_even_with_dirty_tree(

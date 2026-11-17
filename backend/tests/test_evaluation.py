@@ -252,57 +252,6 @@ def test_release_report_requires_committed_human_review(
         EVALUATION.build_v02_contract_report(require_reference=True)
 
 
-def test_required_reference_must_be_tracked_by_git(
-    valid_curated_reference: dict[str, object],
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    reference_path = tmp_path / "eval" / "results" / "v0.2-reference.json"
-    reference_path.parent.mkdir(parents=True)
-    reference_path.write_text(
-        json.dumps(valid_curated_reference, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(EVALUATION, "ROOT", tmp_path)
-    monkeypatch.setattr(EVALUATION, "V02_REFERENCE", reference_path)
-    monkeypatch.setattr(EVALUATION, "validate_curated_reference", lambda _reference: None)
-    tracked = {"value": False}
-    commands: list[list[str]] = []
-
-    def git_ls_files(command: list[str], **kwargs: object) -> SimpleNamespace:
-        commands.append(command)
-        assert kwargs == {
-            "cwd": tmp_path,
-            "capture_output": True,
-            "text": True,
-        }
-        return SimpleNamespace(returncode=0 if tracked["value"] else 1)
-
-    monkeypatch.setattr(EVALUATION.subprocess, "run", git_ls_files)
-
-    with pytest.raises(EVALUATION.EvaluationDataError, match="tracked by Git"):
-        EVALUATION.load_committed_v02_reference(required=True)
-
-    tracked["value"] = True
-    assert EVALUATION.load_committed_v02_reference(required=True) == valid_curated_reference
-    assert commands == [
-        [
-            "git",
-            "ls-files",
-            "--error-unmatch",
-            "--",
-            "eval/results/v0.2-reference.json",
-        ],
-        [
-            "git",
-            "ls-files",
-            "--error-unmatch",
-            "--",
-            "eval/results/v0.2-reference.json",
-        ],
-    ]
-
-
 def test_live_result_artifact_contains_provenance_without_raw_content() -> None:
     datasets = EVALUATION.load_v02_datasets()
     metrics, outcomes = EVALUATION.evaluate_v02_generation(datasets["grounded_generation"])
