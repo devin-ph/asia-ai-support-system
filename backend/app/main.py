@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-import uuid
-
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import Settings, load_settings
-from app.intent import IntentLabel
 from app.providers import (
     ChatProviders,
     GroundedResponseRuntime,
     default_chat_providers,
 )
 from app.providers.factory import build_response_runtime
+from app.reference_system import ReferenceSystem
 from app.schemas import (
     ActionConfirmRequest,
     ActionConfirmResponse,
@@ -22,29 +20,19 @@ from app.schemas import (
     AdminOverview,
     ChatRequest,
     ChatResponse,
-    Citation,
     HealthResponse,
-    PendingAction,
-    ToolEvent,
-    ToolEventStatus,
-    ToolName,
 )
 from app.state import DemoState
 
 router = APIRouter(prefix="/api")
-
-GENERAL_REPLY = (
-    "Xin chào! Mình là A.S.I.A, trợ lý hỗ trợ khách hàng. Bạn có thể hỏi về "
-    "chính sách, tra cứu đơn hàng hoặc yêu cầu tạo phiếu hỗ trợ."
-)
 
 
 def _state(request: Request) -> DemoState:
     return request.app.state.demo_state
 
 
-def _chat_providers(request: Request) -> ChatProviders:
-    return request.app.state.chat_providers
+def _reference_system(request: Request) -> ReferenceSystem:
+    return request.app.state.reference_system
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -55,71 +43,8 @@ async def health() -> HealthResponse:
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest, request: Request) -> ChatResponse:
-    """Handle one customer-support message within reviewed provider boundaries."""
-    state = _state(request)
-    providers = _chat_providers(request)
-    analysis = providers.analyzer.analyze(req.message)
-    intent = analysis.intent
-    sentiment = analysis.sentiment
-    assistant_message = GENERAL_REPLY
-    citations: list[Citation] = []
-    tool_events: list[ToolEvent] = []
-    pending_action: PendingAction | None = None
-
-    if intent in {
-        IntentLabel.SHIPPING_POLICY,
-        IntentLabel.RETURN_REFUND,
-        IntentLabel.WARRANTY,
-    }:
-        policy_result = await providers.policy.answer(
-            req.message,
-            request_id=uuid.uuid4().hex,
-        )
-        assistant_message = policy_result.answer
-        citations = list(policy_result.citations)
-        if policy_result.lookup_performed:
-            state.record_tool("policy_search")
-            tool_events.append(
-                ToolEvent(
-                    tool=ToolName.POLICY_SEARCH,
-                    status=(
-                        ToolEventStatus.COMPLETED
-                        if citations
-                        else ToolEventStatus.INSUFFICIENT_CONTEXT
-                    ),
-                )
-            )
-    elif intent == IntentLabel.ORDER_LOOKUP:
-        order_result = providers.orders.lookup(req.message)
-        assistant_message = order_result.answer
-        if order_result.lookup_performed:
-            state.record_tool("order_lookup")
-            tool_events.append(
-                ToolEvent(
-                    tool=ToolName.ORDER_LOOKUP,
-                    status=(
-                        ToolEventStatus.COMPLETED
-                        if order_result.order is not None
-                        else ToolEventStatus.NOT_FOUND
-                    ),
-                    order=order_result.order,
-                )
-            )
-    elif intent == IntentLabel.TICKET_REQUEST:
-        assistant_message = (
-            "Mình đã chuẩn bị một phiếu hỗ trợ nháp. Vui lòng kiểm tra và xác nhận trước khi tạo."
-        )
-        pending_action = state.draft_ticket(req.message)
-
-    state.record_message(intent, sentiment)
-    return ChatResponse(
-        assistant_message=assistant_message,
-        intent=intent,
-        sentiment=sentiment,
-        citations=citations,
-        tool_events=tool_events,
-        pending_action=pending_action,
-    )
+    """Handle one customer Turn through the Reference System."""
+    return await _reference_system(request).handle(req.message)
 
 
 @router.post(
@@ -181,8 +106,13 @@ def create_app(
         redoc_url="/redoc",
     )
     runtime = response_runtime or build_response_runtime(validated_settings)
-    application.state.demo_state = state or DemoState()
-    application.state.chat_providers = chat_providers or default_chat_providers(runtime)
+    demo_state = state or DemoState()
+    application.state.demo_state = demo_state
+    application.state.reference_system = ReferenceSystem(
+        chat_providers or default_chat_providers(runtime),
+        draft_ticket=demo_state.draft_ticket,
+        counters=demo_state.counters,
+    )
     application.state.settings = validated_settings
     application.state.response_runtime = runtime
     application.add_middleware(

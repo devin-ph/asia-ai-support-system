@@ -6,6 +6,8 @@ file only adds backend-specific rules.
 ## Map
 
 - `app/main.py`: FastAPI app and thin route handlers.
+- `app/reference_system.py`: the Reference System. `handle(message)` runs one
+  Turn: routing, tool events, counters, and Pending Action drafts.
 - `app/config.py`: typed provider settings, validated at startup.
 - `app/schemas.py`: public Pydantic request and response models.
 - `app/intent.py`: deterministic Vietnamese intent and sentiment analyzer.
@@ -15,14 +17,16 @@ file only adds backend-specific rules.
   baseline, plus the shared insufficient-context answer.
 - `app/providers/`: analyzer, policy, order, ticket, and generation boundaries,
   plus the factory.
-- `app/state.py`, `app/ticket_service.py`, `app/storage.py`: in-memory
-  counters, pending actions, idempotent confirmation, and atomic ticket writes.
+- `app/state.py`, `app/ticket_service.py`, `app/storage.py`: `UsageCounters`,
+  pending actions, idempotent confirmation, and atomic ticket writes.
 
 ## Rules
 
-- Keep handlers thin; business rules belong in services or `state.py`.
-- The chat route sees only `ChatProviders`, which has no ticket write
-  capability. Tickets are written only by the confirmation endpoint.
+- Keep handlers thin; business rules belong in `reference_system.py`, services,
+  or `state.py`.
+- The chat route only calls `ReferenceSystem.handle`. It is built from
+  `ChatProviders`, a draft-only callable, and counters, with no ticket write or
+  resolve capability. Tickets are written only by the confirmation endpoint.
 - Build citations from retrieved evidence. Never trust source, section, or ID
   text returned by a model.
 - Pin external endpoints in code. Ambient SDK variables such as

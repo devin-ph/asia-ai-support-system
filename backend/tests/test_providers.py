@@ -7,14 +7,12 @@ from dataclasses import fields
 from datetime import UTC, date, datetime
 from pathlib import Path
 
-import httpx
 import pytest
 from app.intent import (
     IntentAnalysis,
     IntentLabel,
     SentimentLabel,
 )
-from app.main import create_app
 from app.order_service import (
     ORDER_ACCESS_DENIED_MESSAGE,
     OrderLookupResult,
@@ -36,6 +34,7 @@ from app.providers.tickets import (
     LocalTicketProvider,
     TicketProvider,
 )
+from app.reference_system import ReferenceSystem
 from app.schemas import (
     ActionStatus,
     ActionType,
@@ -333,27 +332,20 @@ def test_ticket_provider_confirmation_contract(
     ids=["deterministic", "fake"],
 )
 @pytest.mark.anyio
-async def test_provider_swap_preserves_chat_route_contract(
+async def test_provider_swap_preserves_reference_system_contract(
     providers_factory: Callable[[], ChatProviders],
     tickets_path: Path,
 ) -> None:
-    application = create_app(
-        DemoState(tickets_path=tickets_path),
-        chat_providers=providers_factory(),
+    state = DemoState(tickets_path=tickets_path)
+    system = ReferenceSystem(
+        providers_factory(),
+        draft_ticket=state.draft_ticket,
+        counters=state.counters,
     )
-    transport = httpx.ASGITransport(app=application)
 
-    async with httpx.AsyncClient(
-        transport=transport,
-        base_url="http://test",
-    ) as client:
-        response = await client.post(
-            "/api/chat",
-            json={"message": "Tôi muốn đổi trả sản phẩm"},
-        )
+    response = await system.handle("Tôi muốn đổi trả sản phẩm")
 
-    assert response.status_code == 200
-    body = response.json()
+    body = response.model_dump(mode="json")
     assert set(body) == {
         "assistant_message",
         "intent",
@@ -368,41 +360,33 @@ async def test_provider_swap_preserves_chat_route_contract(
 
 
 @pytest.mark.anyio
-async def test_chat_route_cannot_execute_ticket_write(
+async def test_reference_system_cannot_execute_ticket_write(
     tickets_path: Path,
 ) -> None:
     tickets = FakeTicketProvider()
-    application = create_app(
-        DemoState(ticket_provider=tickets),
-        chat_providers=ChatProviders(
+    state = DemoState(ticket_provider=tickets)
+    system = ReferenceSystem(
+        ChatProviders(
             analyzer=FakeAnalyzerProvider(IntentLabel.TICKET_REQUEST),
             policy=FakePolicyProvider(),
             orders=FakeOrdersProvider(),
         ),
+        draft_ticket=state.draft_ticket,
+        counters=state.counters,
     )
-    transport = httpx.ASGITransport(app=application)
 
-    async with httpx.AsyncClient(
-        transport=transport,
-        base_url="http://test",
-    ) as client:
-        draft = await client.post(
-            "/api/chat",
-            json={"message": "Tạo phiếu hỗ trợ"},
-        )
+    response = await system.handle("Tạo phiếu hỗ trợ")
 
-        action = draft.json()["pending_action"]
-        assert action is not None
-        assert tickets.draft_calls == 1
-        assert tickets.resolve_calls == 0
-        assert tickets.ticket_count == 0
+    action = response.pending_action
+    assert action is not None
+    assert tickets.draft_calls == 1
+    assert tickets.resolve_calls == 0
+    assert tickets.ticket_count == 0
 
-        confirmed = await client.post(
-            f"/api/actions/{action['action_id']}/confirm",
-            json={"confirm": True},
-        )
+    resolution = state.resolve_action(action.action_id, confirm=True)
 
-    assert confirmed.status_code == 200
+    assert resolution is not None
+    assert resolution.status == ActionStatus.CONFIRMED
     assert tickets.resolve_calls == 1
     assert tickets.ticket_count == 1
     assert load_tickets(tickets_path) == ()
