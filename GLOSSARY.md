@@ -9,6 +9,12 @@ must cite, refuse, and never act without confirmation.
 One pairing of an architecture and a pinned model that the benchmark scores.
 _Avoid_: system, setup, agent
 
+**Turn**:
+One customer message handled end to end by an architecture, producing one
+reply with its intent, sentiment, citations, tool events, and any pending
+action.
+_Avoid_: request, exchange, chat handling
+
 **Architecture**:
 The way authority is divided between the model and the application in a
 configuration under test.

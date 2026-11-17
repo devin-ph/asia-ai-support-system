@@ -57,16 +57,25 @@ conversation, or log data to an external provider.
 
 ## Git
 
-- Work on a short-lived branch (`feat/`, `fix/`, `chore/`, `docs/`) for
-  anything beyond a typo. Never commit to `main` directly.
-- Every push runs CI. Merge to `main` with a squash once CI is green.
-- Do not commit, push, or merge unless the user asks. When asked, use explicit
-  paths (`git add -- <files>`) and Conventional Commit messages.
-- Never commit secrets, real PII, `var/`, `node_modules/`, or build output.
+The owner runs every Git write command. Agents never stage, commit, amend,
+branch, merge, rebase, tag, or push, even when a change is finished. Read-only
+commands such as `git status`, `git diff`, and `git log` are fine.
+
+- Everyday work happens directly on `main`. A branch is worth it only for risky
+  or multi-day work, such as the v0.3 harness refactor.
+- When a task is done, suggest the commands for the owner to run: one
+  `git add -- <explicit paths>` and one Conventional Commit message per
+  finished task. Split only when it clearly helps.
+- Suggested commit messages carry no `Co-Authored-By` or other AI attribution
+  trailer.
+- Never suggest committing secrets, real PII, `var/`, `node_modules/`, or build
+  output.
+- CI runs on every push and weekly. If `main` goes red, the next commit fixes it.
+- Releases are annotated tags on `main`.
 
 ## Done
 
 - `python scripts/dev.py verify` passes for code, test, config, or contract
   changes. For a docs-only edit, a short manual check is enough.
 - No invariant is broken, and the scope document matches any contract change.
-- Report failures plainly and leave failing work uncommitted.
+- Report failures plainly. Suggest commit commands only for work that passes.

@@ -74,7 +74,7 @@ update PRs.
    `eval/README.md`.
 4. Run `python scripts/dev.py eval --suite v0.2 --curate-reference <file>`. It
    validates the run and writes `eval/results/v0.2-reference.json`.
-5. Commit the reference, merge to `main`, run
+5. Commit the reference on `main`, run
    `python scripts/dev.py verify --release` and the E2E suite, then tag
    `v0.2.0`.
 
