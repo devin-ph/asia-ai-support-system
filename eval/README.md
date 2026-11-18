@@ -194,13 +194,14 @@ result is 21/21 for automated groundedness, citation coverage, and citation
 validity. This does not complete the final `grounded_response_pass_rate`, which
 also requires the live human review defined below.
 
-Prompt contract `grounded-policy-v4` requires each non-empty output line to
-equal one complete evidence line or paragraph after whitespace normalization.
-Substring fragments are rejected so qualifiers and negations cannot be clipped
-away. The application adds the fixed answer wrapper itself. Paraphrases,
-invented text, citation metadata, or any other malformed output trigger the
-deterministic evidence-template fallback. This is an internal grounding
-boundary and does not change the public API envelope.
+Prompt contract `grounded-policy-v6` numbers each evidence line (one policy
+paragraph), and the model returns only the selected line ids under a strict
+JSON schema. The application renders the exact text of those lines, so
+qualifiers and negations cannot be clipped away, then re-validates it and adds
+the fixed answer wrapper. Invalid JSON, an empty selection, an unknown id, or
+any rendered text that fails validation triggers the deterministic
+evidence-template fallback. This is an internal grounding boundary and does not
+change the public API envelope.
 
 Human scores:
 

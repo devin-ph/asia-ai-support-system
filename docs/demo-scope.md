@@ -75,6 +75,8 @@ contract change and must update this file in the same change.
 - The analyzer and local retriever make no external calls.
 - An external generator receives only a redacted policy query, allowlisted
   evidence text, and generation instructions, at an endpoint pinned in code.
+  It returns only the ids of evidence lines; the application renders their
+  exact text.
 - Order results, tickets, pending actions, admin state, conversation history,
   internal customer IDs, and raw logs are never sent externally.
 - Redaction covers tested structured identifiers (demo order IDs, emails,

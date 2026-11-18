@@ -4,7 +4,8 @@
 
 Accepted; runtime authentication handling amended on 2026-07-15. Amended
 2026-11-16: the SDK moved to major version 3 and the endpoint is pinned
-explicitly. Extended for v0.3 by ADR-008.
+explicitly. Extended for v0.3 by ADR-008. Amended 2026-11-18: the model
+selects evidence line ids through a strict JSON schema instead of copying text.
 
 ## Context
 
@@ -31,20 +32,28 @@ external generator.
   curation rejects any artifact that does not use this exact snapshot.
 - Network calls use `AsyncOpenAI` and the Responses API with no tools and
   `store=False`. The base URL is set explicitly, so ambient SDK variables such
-  as `OPENAI_BASE_URL` cannot redirect egress. The model returns answer text only; the application attaches
-  citation metadata from the retrieved evidence.
+  as `OPENAI_BASE_URL` cannot redirect egress. The model returns evidence line
+  ids only; the application renders their text and attaches citation metadata
+  from the retrieved evidence.
 - The request contains only generation instructions, a redacted policy query,
   and allowlisted policy evidence. Order, ticket, customer, conversation,
   admin, and raw log data are excluded.
 - Calls use a short, explicit timeout, initially 15 seconds. SDK retries are
   disabled so one request cannot turn into an unbounded demo delay.
-- Prompt contract `grounded-policy-v4` permits only complete evidence lines or
-  paragraphs, one per non-empty output line. After whitespace normalization,
-  each output line must equal a full evidence unit; substring fragments are
-  rejected so qualifiers and negations cannot be clipped away. The application
-  renders the fixed answer wrapper. Paraphrased, invented, metadata-bearing, or
-  otherwise invalid output is treated as malformed and uses the deterministic
-  evidence template.
+- Prompt contract `grounded-policy-v6` numbers every evidence line (one policy
+  paragraph) and asks for `{"line_ids": [...]}` under a strict JSON schema. The
+  application renders the exact text of the selected lines, so a paragraph can
+  never be clipped and qualifiers or negations cannot be dropped. Invalid JSON,
+  an empty selection, or an unknown id is malformed output. The rendered text
+  still passes the earlier validator (complete lines, evidence-only numbers, no
+  citation metadata) as a second layer. The application renders the fixed
+  answer wrapper, and malformed output uses the deterministic evidence
+  template.
+- Versions up to `grounded-policy-v5` asked the model to copy complete lines.
+  The first two live runs fell back on 4/21 and then 2/21 cases because the
+  model returned one sentence of a two-sentence paragraph, despite explicit
+  instructions. Instructions alone could not guarantee the output shape, so the
+  shape moved into the schema and the application.
 - Missing credentials or model configuration fails before startup. Runtime
   authentication or permission rejection, connection failure, timeout, rate
   limiting, server failure, empty output, or malformed output falls back to the

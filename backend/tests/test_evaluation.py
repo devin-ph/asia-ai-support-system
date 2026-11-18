@@ -53,7 +53,7 @@ def valid_curated_reference() -> dict[str, object]:
     live_artifact = EVALUATION.build_live_result_artifact(
         provider="openai",
         model=EVALUATION.V02_REFERENCE_MODEL,
-        prompt_version="grounded-policy-v4",
+        prompt_version="grounded-policy-v6",
         timeout_seconds=15.0,
         duration_ms=2100.0,
         metrics=metrics,
@@ -232,7 +232,7 @@ def test_v02_offline_generation_meets_the_automated_frozen_gates() -> None:
     assert report["generation_config"] == {
         "provider": "template",
         "model": None,
-        "prompt_version": "grounded-policy-v4",
+        "prompt_version": "grounded-policy-v6",
         "evidence_limit": 1,
         "external_network": False,
         "application_owned_citations": True,
@@ -258,7 +258,7 @@ def test_live_result_artifact_contains_provenance_without_raw_content() -> None:
     artifact = EVALUATION.build_live_result_artifact(
         provider="openai",
         model="test-model-snapshot",
-        prompt_version="grounded-policy-v4",
+        prompt_version="grounded-policy-v6",
         timeout_seconds=15.0,
         duration_ms=2100.0,
         metrics=metrics,
@@ -295,7 +295,7 @@ def test_live_result_artifact_contains_provenance_without_raw_content() -> None:
     fallback_artifact = EVALUATION.build_live_result_artifact(
         provider="openai",
         model="test-model-snapshot",
-        prompt_version="grounded-policy-v4",
+        prompt_version="grounded-policy-v6",
         timeout_seconds=15.0,
         duration_ms=2100.0,
         metrics=metrics,
@@ -314,7 +314,7 @@ def test_curated_reference_requires_human_scores_and_strips_answer_text() -> Non
     live_artifact = EVALUATION.build_live_result_artifact(
         provider="openai",
         model=EVALUATION.V02_REFERENCE_MODEL,
-        prompt_version="grounded-policy-v4",
+        prompt_version="grounded-policy-v6",
         timeout_seconds=15.0,
         duration_ms=2100.0,
         metrics=metrics,
@@ -402,7 +402,7 @@ def test_curated_reference_rejects_unreviewed_or_fallback_run() -> None:
     live_artifact = EVALUATION.build_live_result_artifact(
         provider="openai",
         model=EVALUATION.V02_REFERENCE_MODEL,
-        prompt_version="grounded-policy-v4",
+        prompt_version="grounded-policy-v6",
         timeout_seconds=15.0,
         duration_ms=2100.0,
         metrics=metrics,
@@ -423,7 +423,7 @@ def test_curated_reference_rejects_local_model_override() -> None:
     live_artifact = EVALUATION.build_live_result_artifact(
         provider="openai",
         model="local-experiment-model",
-        prompt_version="grounded-policy-v4",
+        prompt_version="grounded-policy-v6",
         timeout_seconds=15.0,
         duration_ms=2100.0,
         metrics=metrics,
@@ -442,7 +442,7 @@ def test_curated_reference_rejects_tampered_metrics_or_provenance() -> None:
     live_artifact = EVALUATION.build_live_result_artifact(
         provider="openai",
         model=EVALUATION.V02_REFERENCE_MODEL,
-        prompt_version="grounded-policy-v4",
+        prompt_version="grounded-policy-v6",
         timeout_seconds=15.0,
         duration_ms=2100.0,
         metrics=metrics,
